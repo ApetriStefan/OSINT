@@ -1,0 +1,299 @@
+#!/usr/bin/env python3
+import sqlite3
+import json
+import requests
+import subprocess
+import socket
+import time
+import platform
+import sys
+from datetime import datetime
+from bs4 import BeautifulSoup
+
+# Configure stdout encoding to prevent UnicodeEncodeError on Windows console
+if sys.platform.startswith("win"):
+    sys.stdout.reconfigure(encoding='utf-8')
+
+DB_NAME = "political_intel.db"
+MODEL_NAME = "gemma-4-e4b"
+
+# CONFIGURARE: Plafonarea surselor mărită pentru o selecție mult mai largă
+SOURCE_CAPS = {
+    "G4Media": 15,
+    "HotNews": 15,
+    "Digi24": 15,
+    "B1TV": 15,
+    "ActiveNews": 12,
+    "Agerpres": 12,
+    "Mediafax": 12,
+    "Antena 3": 8,
+    "România TV": 8
+}
+
+def is_ollama_running(port=11434):
+    """Verifică dacă portul local de Ollama este activ."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        return s.connect_ex(('localhost', port)) == 0
+
+def ensure_ollama_running():
+    """Pornește automat serviciul Ollama dacă acesta este închis."""
+    if is_ollama_running():
+        print("[+] Serverul Ollama este deja activ.")
+        return True
+        
+    print("[*] Serverul Ollama nu rulează. Se încearcă pornirea automată...")
+    try:
+        if platform.system() == "Windows":
+            subprocess.Popen(["ollama", "serve"], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            subprocess.Popen(["ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        for i in range(10):
+            print(f" -> Se așteaptă inițializarea serverului... ({i+1}/10)")
+            time.sleep(2)
+            if is_ollama_running():
+                print("[+] Serverul Ollama a pornit cu succes!")
+                return True
+    except Exception as e:
+        print(f"[-] Eroare la pornirea automată a Ollama: {e}")
+        return False
+
+def get_all_articles_from_today():
+    """Extrage articolele de azi, dar le limitează inteligent pentru a nu bloca GPU-ul."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    print(f"[*] Interogare DB pentru data de astăzi: {today_str}")
+    
+    cursor.execute("""
+        SELECT id, source_name, title, summary, link, published_date, scraped_at 
+        FROM raw_articles 
+        WHERE date(scraped_at, 'localtime') = ? OR published_date = ?
+        ORDER BY id DESC
+        LIMIT 300
+    """, (today_str, today_str))
+    rows = cursor.fetchall()
+    
+    if not rows:
+        print("[!] Nicio știre găsită în DB pentru data de astăzi.")
+        print("[*] Se încarcă ultimele 150 de știri din baza de date pentru testare.")
+        cursor.execute("""
+            SELECT id, source_name, title, summary, link, published_date, scraped_at 
+            FROM raw_articles 
+            ORDER BY id DESC 
+            LIMIT 150
+        """)
+        rows = cursor.fetchall()
+        
+    conn.close()
+    
+    articles = []
+    for row in rows:
+        articles.append({
+            "id": row[0],
+            "source_name": row[1],
+            "title": row[2],
+            "summary": row[3],
+            "link": row[4],
+            "published_date": row[5],
+            "scraped_at": row[6]
+        })
+    return articles
+
+def call_ollama_stream(system_prompt, user_prompt, format_json=False):
+    """Efectuează apelul API către Ollama cu context mărit și afișează streaming live brut în consolă."""
+    url = "http://localhost:11434/api/chat"
+    payload = {
+        "model": MODEL_NAME,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        "stream": True,
+        "options": {
+            "temperature": 0.0,
+            "top_p": 0.1,
+            "num_ctx": 64000  # CONFIGURARE: Context mărit la 64k tokeni pentru ambele conversații
+        }
+    }
+    if format_json:
+        payload["format"] = "json"
+
+    print("\n--- INCEPUT GENERARE MODEL ---")
+    full_response = ""
+    try:
+        # Timeout mărit la 300 de secunde pentru a permite CPU offloading în caz de limitare VRAM
+        response = requests.post(url, json=payload, stream=True, timeout=300)
+        for line in response.iter_lines():
+            if line:
+                chunk = json.loads(line.decode('utf-8'))
+                text = chunk.get("message", {}).get("content", "")
+                sys.stdout.write(text)
+                sys.stdout.flush()
+                full_response += text
+    except Exception as e:
+        print(f"\n[-] Eroare la comunicarea cu modelul: {e}")
+    
+    print("\n--- SFARSIT GENERARE MODEL ---\n")
+    return full_response
+
+def scrape_full_text(url):
+    """Scrape-ează corpul de text din pagina web a știrii."""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)"
+    }
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code != 200:
+            return None
+        
+        soup = BeautifulSoup(response.text, "html.parser")
+        paragraphs = soup.find_all("p")
+        
+        cleaned_paragraphs = []
+        for p in paragraphs:
+            text = p.get_text().strip()
+            if len(text) > 25:
+                cleaned_paragraphs.append(text)
+                
+        return "\n\n".join(cleaned_paragraphs)[:6000]
+    except Exception as e:
+        print(f"\n[-] Eroare la scanarea URL-ului {url}: {e}")
+        return None
+
+if __name__ == "__main__":
+    if not ensure_ollama_running():
+        exit(1)
+        
+    db_articles = get_all_articles_from_today()
+    if not db_articles:
+        print("[-] Nu s-au găsit articole în baza de date. Proces oprit.")
+        exit(1)
+        
+    print(f"[+] S-au încărcat {len(db_articles)} articole brute din baza de date.")
+    
+    # CONFIGURARE: Limita absolută mărită la 100 de articole trimise către prima conversație
+    selection_input = []
+    source_tracker = {}
+    
+    for a in db_articles:
+        src = a["source_name"]
+        cap = SOURCE_CAPS.get(src, 10)
+        
+        if source_tracker.get(src, 0) < cap:
+            short_summary = a["summary"][:100] + "..." if a["summary"] else "No summary available"
+            selection_input.append({
+                "title": a["title"],
+                "source": src,
+                "summary": short_summary,
+                "link": a["link"]
+            })
+            source_tracker[src] = source_tracker.get(src, 0) + 1
+            
+        if len(selection_input) >= 100:  # Limita absolută mărită la 100 de intrări
+            break
+
+    print(f"[*] S-au filtrat {len(selection_input)} articole echilibrate pe surse pentru a fi trimise modelului.")
+
+    # CONVERSAȚIA 1: Selecția macro realizată direct de Gemma
+    print("\n[*] Pornire Conversația 1: Analiză și selecție știri...")
+    system_prompt_1 = (
+        "You are a Senior Intelligence Director. Analyze the following list of raw daily news articles from Romania. "
+        "Select exactly 5 to 7 articles that represent the highest strategic importance: DOMESTIC POLITICS, MACROECONOMY, NATIONAL SECURITY, or SEVERE SYSTEMIC CRISES. "
+        "CRITICAL RULES: "
+        "1. You MUST completely IGNORE and FILTER OUT any articles about: Reality TV shows, showbiz, weather forecasts, sports, minor accidents, or generic international news that doesn't involve Romania. "
+        "2. If there are only a few actual political/strategic articles, just pick those. Do not fill the quota with garbage news. "
+        "Output your selection STRICTLY as a JSON array containing objects with keys: 'title', 'link', 'source'."
+    )
+    user_prompt_1 = f"Identify the top strategic news from this list: {json.dumps(selection_input)}"
+    
+    raw_json_selection = call_ollama_stream(system_prompt_1, user_prompt_1, format_json=True)
+    
+    # Parsarea selecției modelului
+    selected_list = []
+    try:
+        json_clean = raw_json_selection
+        if "</think>" in json_clean:
+            json_clean = json_clean.split("</think>")[-1].strip()
+            
+        parsed_selection = json.loads(json_clean)
+        
+        # Logica robustă de detectare a listei în JSON (indiferent de denumirea cheilor)
+        if isinstance(parsed_selection, dict):
+            selected_list = parsed_selection.get("selected_articles", None)
+            if not selected_list:
+                # Căutăm dinamic orice cheie care conține o listă în interiorul dicționarului
+                for k, v in parsed_selection.items():
+                    if isinstance(v, list):
+                        selected_list = v
+                        break
+            if not selected_list:
+                selected_list = list(parsed_selection.values())[0]
+        elif isinstance(parsed_selection, list):
+            selected_list = parsed_selection
+            
+        if not isinstance(selected_list, list):
+            raise ValueError("Parsed selection is not a list")
+            
+    except Exception as e:
+        print(f"[-] Eșec la decodarea JSON-ului generat: {e}")
+        print("[*] Se trece la procesarea de siguranță...")
+        selected_list = selection_input[:5]
+
+    # Descărcarea textului complet
+    print(f"\n[+] S-au selectat {len(selected_list)} articole.")
+    
+    scraped_data_package = []
+    for idx, item in enumerate(selected_list):
+        title = item.get("title", "No Title")
+        link = item.get("link", "")
+        source = item.get("source", item.get("source_name", "Unknown"))
+        
+        print(f" -> [{idx+1}/{len(selected_list)}] Descărcare text: {title[:50]}... ", end="", flush=True)
+        full_text = scrape_full_text(link)
+        
+        if full_text and len(full_text) > 100:
+            print("[SUCCES]")
+            scraped_data_package.append({
+                "title": title,
+                "source": source,
+                "full_text": full_text
+            })
+        else:
+            print("[EȘEC]")
+
+    if not scraped_data_package:
+        print("[-] Nu s-a putut descărca textul integral. Proces oprit.")
+        exit(1)
+
+    # CONVERSAȚIA 2: Generarea Dosarului
+    print("\n[*] Pornire Conversația 2: Generare dosar de presă bazat pe textele integrale...")
+    
+    system_prompt_2 = (
+        "You are a Master OSINT Journalist and Analyst. Read the full scraped text of the selected news articles "
+        "and generate a comprehensive, highly detailed news summary dossier in Romanian.\n\n"
+        "You MUST strictly follow this exact plain-text format for each article, separating them with double newlines:\n\n"
+        "ȘTIREA [Number]: [CLEAN TITLE HERE - DO NOT BOLD, DO NOT USE # OR ANY MARKDOWN AT ALL]\n"
+        "[Write a comprehensive, deep, and highly informative narrative summary in Romanian. This summary must "
+        "preserve the political context, key figures, critical facts, and include direct verbatim Romanian quotes from "
+        "the provided text. Keep it strictly professional, objective, and analytical. Write at least 2-3 detailed paragraphs for each story to ensure deep coverage.]\n"
+        "(Sursa: [Source Name] - [Current Date, e.g., 10 Iunie 2026])\n\n"
+        "CRITICAL FORMAT RULES:\n"
+        "1. Do not use any markdown headers (such as #, ##, ###) or bold any words inside the title line or text.\n"
+        "2. Do not write any conversational intros or outros (like 'Sure, here is your summary'). Start directly with 'ȘTIREA 1:'.\n"
+        "3. Keep Romanian quotes completely verbatim."
+    )
+    
+    user_prompt_2 = f"Generate the structured news summaries for these fully scraped articles:\n\n{json.dumps(scraped_data_package)}"
+    
+    dossier_output = call_ollama_stream(system_prompt_2, user_prompt_2, format_json=False)
+    
+    output_file = "dossier_for_agent_1.txt"
+    with open(output_file, "w", encoding="utf-8") as f:
+        final_text = dossier_output
+        if "</think>" in final_text:
+            final_text = final_text.split("</think>")[-1].strip()
+        f.write(final_text)
+        
+    print(f"[+] Proces finalizat. Rezultatele au fost salvate în: {output_file}")
