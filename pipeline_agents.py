@@ -6,7 +6,6 @@ import sys
 import os
 from datetime import datetime
 
-# Configurăm encoding-ul pentru consolă pe Windows
 if sys.platform.startswith("win"):
     sys.stdout.reconfigure(encoding='utf-8')
 
@@ -77,10 +76,9 @@ SCHEMA_AGENT_3 = {
     "required": ["threat_vectors"]
 }
 
-# --- FUNCȚII DE UTILITATE ---
+# --- FUNCȚII PRINCIPALE ---
 
 def call_ollama_agent(system_prompt, user_prompt, temperature=0.0, top_p=0.1, json_schema=None):
-    """Apelează Ollama cu streaming live și configurări stricte per Agent."""
     url = "http://localhost:11434/api/chat"
     payload = {
         "model": MODEL_NAME,
@@ -92,7 +90,7 @@ def call_ollama_agent(system_prompt, user_prompt, temperature=0.0, top_p=0.1, js
         "options": {
             "temperature": temperature,
             "top_p": top_p,
-            "num_ctx": 64000  # Context extins
+            "num_ctx": 64000  # Context extins la 64k tokeni
         }
     }
     
@@ -114,17 +112,14 @@ def call_ollama_agent(system_prompt, user_prompt, temperature=0.0, top_p=0.1, js
         print(f"\n[-] Eroare la comunicarea cu modelul: {e}")
     print("\n--- SFARSIT GENERARE AGENT ---\n")
     
-    # Curățare automată a block-ului <think> din răspunsul final
     if "</think>" in full_response:
         full_response = full_response.split("</think>")[-1].strip()
         
     return full_response
 
 def get_historical_context(actor):
-    """Caută în baza de date declarații trecute ale actorului (RAG Simplificat)."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    # Căutăm declarații din trecut (excluzând ziua de azi) pentru actorul respectiv
     cursor.execute("""
         SELECT extracted_at, verbatim_evidence 
         FROM extracted_events 
@@ -175,8 +170,6 @@ def save_threats_to_db(threats):
     conn.commit()
     conn.close()
 
-# --- EXECUTIA PIPELINE-ULUI ---
-
 if __name__ == "__main__":
     if not os.path.exists("dossier_for_agent_1.txt"):
         print("[-] Fișierul 'dossier_for_agent_1.txt' nu există! Rulează mai întâi scriptul selector.")
@@ -220,7 +213,6 @@ if __name__ == "__main__":
         actor = event.get("actor", "")
         history = get_historical_context(actor)
         
-        # Dacă nu avem istoric pentru acest actor, sărim peste pentru a economisi timp/tokeni
         if not history:
             continue
             
@@ -312,7 +304,7 @@ if __name__ == "__main__":
         json.dumps(payload_4, ensure_ascii=False), 
         temperature=0.0, 
         top_p=0.1, 
-        json_schema=None # Agent 4 generează Markdown liber, nu JSON
+        json_schema=None
     )
 
     # Salvarea rezultatului final
@@ -322,4 +314,4 @@ if __name__ == "__main__":
     with open(output_filename, "w", encoding="utf-8") as f:
         f.write(final_markdown)
         
-    print(f"\n[+] PROCES COMPLET! Dosarul final a fost generat cu succes: {output_filename}")
+    print(f"\n[+] PROCES COMPLETE! Dosarul final a fost generat cu succes: {output_filename}")

@@ -1,93 +1,83 @@
 #!/usr/bin/env python3
-import sqlite3
+import feedparser
+import requests
 import json
+import re
 import sys
-from datetime import datetime
 
-# Configurăm codificarea stdout pentru consolele Windows
 if sys.platform.startswith("win"):
     sys.stdout.reconfigure(encoding='utf-8')
 
-DB_NAME = "political_intel.db"
 OUTPUT_FILE = "pre_fix_payload.json"
 
-def get_unfiltered_articles_today():
-    """Extrage toate articolele din baza de date pentru ziua de astăzi fără nicio limitare."""
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    
-    today_str = datetime.now().strftime('%Y-%m-%d')
-    print(f"[*] Interogare DB pentru data de astăzi: {today_str}")
-    
-    # Selectăm absolut toate articolele adăugate sau publicate astăzi, fără clauză LIMIT sau echilibrare
-    cursor.execute("""
-        SELECT id, source_name, title, summary, link, published_date, scraped_at 
-        FROM raw_articles 
-        WHERE date(scraped_at, 'localtime') = ? OR published_date = ?
-        ORDER BY id DESC
-    """, (today_str, today_str))
-    rows = cursor.fetchall()
-    
-    # Fallback de siguranță la toate articolele din DB dacă nu s-au făcut adăugiri astăzi
-    if not rows:
-        print("[!] Nicio știre găsită în DB pentru data de astăzi.")
-        print("[*] Se activează fallback-ul: se încarcă toate articolele existente în DB.")
-        cursor.execute("""
-            SELECT id, source_name, title, summary, link, published_date, scraped_at 
-            FROM raw_articles 
-            ORDER BY id DESC
-        """)
-        rows = cursor.fetchall()
-        
-    conn.close()
-    
+RSS_FEEDS = {
+    "G4Media": "https://www.g4media.ro/feed",
+    "HotNews": "https://www.hotnews.ro/feed",
+    "Digi24": "https://www.digi24.ro/rss",
+    "ActiveNews": "https://www.activenews.ro/rss",
+    "B1TV": "https://www.b1tv.ro/feed",
+    "Agerpres": "https://www.agerpres.ro/home.rss",
+    "Mediafax": "https://www.mediafax.ro/rss"
+}
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+}
+
+def clean_html(raw_html):
+    if not raw_html:
+        return ""
+    clean_regex = re.compile('<.*?>')
+    clean_text = re.sub(clean_regex, '', raw_html)
+    return " ".join(clean_text.split())
+
+def fetch_rss_to_json():
+    print("[*] Scanare surse RSS și salvare directă în format JSON...")
     articles = []
-    for row in rows:
-        articles.append({
-            "id": row[0],
-            "source_name": row[1],
-            "title": row[2],
-            "summary": row[3],
-            "link": row[4],
-            "published_date": row[5],
-            "scraped_at": row[6]
-        })
-    return articles
-
-if __name__ == "__main__":
-    articles = get_unfiltered_articles_today()
-    if not articles:
-        print("[-] Baza de date este complet goală.")
-        sys.exit(1)
-        
-    print(f"[+] S-au extras în total {len(articles)} articole brute.")
-
-    # Generăm pachetul exact trimis către Gemma înainte de fix, limitând rezumatul la 100 de caractere
-    selection_input = []
     source_distribution = {}
-    
-    for a in articles:
-        src = a["source_name"]
-        short_summary = a["summary"][:100] + "..." if a["summary"] else "No summary available"
-        selection_input.append({
-            "title": a["title"],
-            "source": src,
-            "summary": short_summary,
-            "link": a["link"]
-        })
-        # Înregistrăm distribuția surselor pentru raport
-        source_distribution[src] = source_distribution.get(src, 0) + 1
 
-    # Statistici de distribuție în consolă
-    print("\n[*] Distribuția articolelor pe surse în acest pachet brut:")
+    for source, url in RSS_FEEDS.items():
+        try:
+            response = requests.get(url, headers=HEADERS, timeout=15)
+            if response.status_code != 200:
+                print(f" -> {source}: EROARE (Status HTTP {response.status_code})")
+                continue
+
+            feed = feedparser.parse(response.content)
+            for entry in feed.entries:
+                title = entry.get("title", "No Title").strip()
+                link = entry.get("link", "").strip()
+                
+                if not link:
+                    continue
+                
+                summary = clean_html(entry.get("summary", entry.get("description", "")))
+                short_summary = summary[:100] + "..." if summary else "No summary available"
+                
+                articles.append({
+                    "title": title,
+                    "source": source,
+                    "summary": short_summary,
+                    "link": link
+                })
+                source_distribution[source] = source_distribution.get(source, 0) + 1
+            print(f" -> {source}: OK")
+            
+        except requests.exceptions.ReadTimeout:
+            print(f" -> {source}: EROARE (Timeout)")
+        except Exception as e:
+            print(f" -> {source}: EROARE ({str(e)})")
+
+    print("\n[*] Distribuția articolelor pe surse extrase astăzi:")
     for src, count in source_distribution.items():
         print(f"    - {src}: {count} articole")
 
-    # Serializare și salvare în format JSON ordonat (pretty print)
     try:
         with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-            json.dump(selection_input, f, indent=4, ensure_ascii=False)
-        print(f"\n[+] Succes! Pachetul complet ({len(selection_input)} intrări) a fost salvat în: {OUTPUT_FILE}")
-        print("[*] Poți deschide acest fișier pentru a analiza structura exactă trimisă inițial către Gemma.")
+            json.dump(articles, f, indent=4, ensure_ascii=False)
+        print(f"\n[+] Succes! Pachetul complet RSS-to-JSON ({len(articles)} intrări) a fost salvat în: {OUTPUT_FILE}")
     except Exception as e:
         print(f"[-] Eroare la salvarea fișierului: {e}")
+
+if __name__ == "__main__":
+    fetch_rss_to_json()

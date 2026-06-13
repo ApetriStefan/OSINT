@@ -7,103 +7,198 @@ import socket
 import time
 import platform
 import sys
+import os
+import re
+import feedparser
 from datetime import datetime
 from bs4 import BeautifulSoup
 
-# Configure stdout encoding to prevent UnicodeEncodeError on Windows console
+# Configurare mediu Windows
 if sys.platform.startswith("win"):
     sys.stdout.reconfigure(encoding='utf-8')
 
 DB_NAME = "political_intel.db"
 MODEL_NAME = "gemma-4-e4b"
 
-# CONFIGURARE: Plafonarea surselor mărită pentru o selecție mult mai largă
-SOURCE_CAPS = {
-    "G4Media": 15,
-    "HotNews": 15,
-    "Digi24": 15,
-    "B1TV": 15,
-    "ActiveNews": 12,
-    "Agerpres": 12,
-    "Mediafax": 12,
-    "Antena 3": 8,
-    "România TV": 8
+# --- KEYWORDS & SOURCES ---
+STRATEGIC_KEYWORDS = [
+    "ciolacu", "ciucă", "tomac", "bolojan", "psd", "pnl", "usr", "aur", "udmr", 
+    "guvern", "ministru", "premier", "dna", "scandal", "licitație", "fonduri", 
+    "pnrr", "nato", "drone", "defecțiune", "anchetă", "csm", "justiție", 
+    "corupție", "parlament", "senat", "deputați", "constituțională", 
+    "rafila", "grindeanu", "turcan"
+]
+
+RSS_FEEDS = {
+    "G4Media": "https://www.g4media.ro/feed",
+    "HotNews": "https://www.hotnews.ro/feed",
+    "Digi24": "https://www.digi24.ro/rss",
+    "ActiveNews": "https://www.activenews.ro/rss",
+    "B1TV": "https://www.b1tv.ro/feed",
+    "Agerpres": "https://www.agerpres.ro/home.rss",
+    "Mediafax": "https://www.mediafax.ro/rss"
 }
 
+HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+
+# --- JSON SCHEMAS ---
+SCHEMA_AGENT_1 = {
+    "type": "object",
+    "properties": {
+        "extracted_events": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "actor": {"type": "string"},
+                    "action": {"type": "string"},
+                    "verbatim_evidence": {"type": "string"},
+                    "topic": {"type": "string"}
+                },
+                "required": ["actor", "action", "verbatim_evidence", "topic"]
+            }
+        }
+    },
+    "required": ["extracted_events"]
+}
+
+SCHEMA_AGENT_2 = {
+    "type": "object",
+    "properties": {
+        "anomalies": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "anomaly_type": {"type": "string"},
+                    "target": {"type": "string"},
+                    "past_statement": {"type": "string"},
+                    "current_statement": {"type": "string"},
+                    "contradiction_score": {"type": "number"},
+                    "analyst_note": {"type": "string"}
+                },
+                "required": ["anomaly_type", "target", "past_statement", "current_statement", "contradiction_score", "analyst_note"]
+            }
+        }
+    },
+    "required": ["anomalies"]
+}
+
+SCHEMA_AGENT_3 = {
+    "type": "object",
+    "properties": {
+        "threat_vectors": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "threat_type": {"type": "string"},
+                    "vulnerable_actor": {"type": "string"},
+                    "exploiting_actor": {"type": "string"},
+                    "description": {"type": "string"}
+                },
+                "required": ["threat_type", "vulnerable_actor", "exploiting_actor", "description"]
+            }
+        }
+    },
+    "required": ["threat_vectors"]
+}
+
+# --- DATABASE SETUP ---
+def ensure_database():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA foreign_keys = ON;")
+    
+    # Init Table (Raw Articles)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS raw_articles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_name TEXT NOT NULL,
+            title TEXT NOT NULL,
+            link TEXT UNIQUE NOT NULL,
+            summary TEXT,
+            published_date TEXT,
+            scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+    # Agent 1 Table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS extracted_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            actor TEXT NOT NULL,
+            action TEXT NOT NULL,
+            verbatim_evidence TEXT NOT NULL,
+            topic TEXT NOT NULL,
+            extracted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+    # Agent 2 Table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS historical_anomalies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            anomaly_type TEXT NOT NULL,
+            target TEXT NOT NULL,
+            past_statement TEXT NOT NULL,
+            current_statement TEXT NOT NULL,
+            contradiction_score REAL NOT NULL,
+            analyst_note TEXT NOT NULL,
+            detected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+    # Agent 3 Table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS threat_vectors (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            threat_type TEXT NOT NULL,
+            vulnerable_actor TEXT NOT NULL,
+            exploiting_actor TEXT NOT NULL,
+            description TEXT NOT NULL,
+            detected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+    conn.commit()
+    conn.close()
+
+# --- UTILS & OLLAMA COMMS ---
+def clean_html(raw_html):
+    if not raw_html: return ""
+    clean_regex = re.compile('<.*?>')
+    return " ".join(re.sub(clean_regex, '', raw_html).split())
+
+def extract_json_from_text(text):
+    """Extrage JSON dintr-un text care poate conține markdown sau <think> tags."""
+    if "</think>" in text:
+        text = text.split("</think>")[-1].strip()
+    match = re.search(r'```(?:json)?\s*(\{.*\}|\[.*\])\s*```', text, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    return text.strip()
+
 def is_ollama_running(port=11434):
-    """Verifică dacă portul local de Ollama este activ."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(('localhost', port)) == 0
 
 def ensure_ollama_running():
-    """Pornește automat serviciul Ollama dacă acesta este închis."""
-    if is_ollama_running():
-        print("[+] Serverul Ollama este deja activ.")
-        return True
-        
-    print("[*] Serverul Ollama nu rulează. Se încearcă pornirea automată...")
+    if is_ollama_running(): return True
+    print("[*] Se încearcă pornirea automată a serverului Ollama...")
     try:
+        cmd = ["ollama", "serve"]
         if platform.system() == "Windows":
-            subprocess.Popen(["ollama", "serve"], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         else:
-            subprocess.Popen(["ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        
-        for i in range(10):
-            print(f" -> Se așteaptă inițializarea serverului... ({i+1}/10)")
+            subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        for _ in range(10):
             time.sleep(2)
-            if is_ollama_running():
-                print("[+] Serverul Ollama a pornit cu succes!")
-                return True
+            if is_ollama_running(): return True
     except Exception as e:
-        print(f"[-] Eroare la pornirea automată a Ollama: {e}")
-        return False
+        print(f"[-] Eroare la pornirea automată: {e}")
+    return False
 
-def get_all_articles_from_today():
-    """Extrage articolele de azi, dar le limitează inteligent pentru a nu bloca GPU-ul."""
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    
-    today_str = datetime.now().strftime('%Y-%m-%d')
-    print(f"[*] Interogare DB pentru data de astăzi: {today_str}")
-    
-    cursor.execute("""
-        SELECT id, source_name, title, summary, link, published_date, scraped_at 
-        FROM raw_articles 
-        WHERE date(scraped_at, 'localtime') = ? OR published_date = ?
-        ORDER BY id DESC
-        LIMIT 300
-    """, (today_str, today_str))
-    rows = cursor.fetchall()
-    
-    if not rows:
-        print("[!] Nicio știre găsită în DB pentru data de astăzi.")
-        print("[*] Se încarcă ultimele 150 de știri din baza de date pentru testare.")
-        cursor.execute("""
-            SELECT id, source_name, title, summary, link, published_date, scraped_at 
-            FROM raw_articles 
-            ORDER BY id DESC 
-            LIMIT 150
-        """)
-        rows = cursor.fetchall()
-        
-    conn.close()
-    
-    articles = []
-    for row in rows:
-        articles.append({
-            "id": row[0],
-            "source_name": row[1],
-            "title": row[2],
-            "summary": row[3],
-            "link": row[4],
-            "published_date": row[5],
-            "scraped_at": row[6]
-        })
-    return articles
-
-def call_ollama_stream(system_prompt, user_prompt, format_json=False):
-    """Efectuează apelul API către Ollama cu context mărit și afișează streaming live brut în consolă."""
+def call_ollama(system_prompt, user_prompt, temp=0.0, top_p=0.1, json_schema=None):
     url = "http://localhost:11434/api/chat"
+    
+    # ATENȚIE: Dacă primești "[EROARE OLLAMA] Out of memory", schimbă num_ctx la 32000 sau 64000.
     payload = {
         "model": MODEL_NAME,
         "messages": [
@@ -112,164 +207,188 @@ def call_ollama_stream(system_prompt, user_prompt, format_json=False):
         ],
         "stream": True,
         "options": {
-            "temperature": 0.0,
-            "top_p": 0.1,
-            "num_ctx": 64000  # CONFIGURARE: Context mărit la 64k tokeni pentru ambele conversații
+            "temperature": temp,
+            "top_p": top_p,
+            "num_ctx": 128000
         }
     }
-    if format_json:
-        payload["format"] = "json"
+    
+    if json_schema:
+        if isinstance(json_schema, dict):
+            payload["format"] = json_schema
+        else:
+            payload["format"] = "json"
 
-    print("\n--- INCEPUT GENERARE MODEL ---")
+    print("\n--- INCEPUT GENERARE OLLAMA ---")
     full_response = ""
     try:
-        # Timeout mărit la 300 de secunde pentru a permite CPU offloading în caz de limitare VRAM
-        response = requests.post(url, json=payload, stream=True, timeout=300)
+        response = requests.post(url, json=payload, stream=True, timeout=None)
         for line in response.iter_lines():
             if line:
                 chunk = json.loads(line.decode('utf-8'))
+                
+                # ACUM PRINDEM ERORILE OLLAMA (EX: OUT OF MEMORY PENTRU CONTEXT)
+                if "error" in chunk:
+                    print(f"\n\n[!!! EROARE OLLAMA CRITICĂ !!!]\nServerul a refuzat cererea: {chunk['error']}")
+                    print("Sugestie: Probabil parametrul 'num_ctx: 128000' cere mai mult RAM decât ai disponibil.")
+                    sys.stdout.flush()
+                    break
+                
                 text = chunk.get("message", {}).get("content", "")
                 sys.stdout.write(text)
                 sys.stdout.flush()
                 full_response += text
     except Exception as e:
-        print(f"\n[-] Eroare la comunicarea cu modelul: {e}")
+        print(f"\n[-] Eroare de rețea cu Ollama: {e}")
+    print("\n--- SFARSIT GENERARE OLLAMA ---\n")
     
-    print("\n--- SFARSIT GENERARE MODEL ---\n")
-    return full_response
+    return extract_json_from_text(full_response)
 
 def scrape_full_text(url):
-    """Scrape-ează corpul de text din pagina web a știrii."""
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)"
-    }
     try:
-        response = requests.get(url, headers=headers, timeout=10)
-        if response.status_code != 200:
-            return None
-        
+        response = requests.get(url, headers=HEADERS, timeout=15)
+        if response.status_code != 200: return None
         soup = BeautifulSoup(response.text, "html.parser")
         paragraphs = soup.find_all("p")
-        
-        cleaned_paragraphs = []
-        for p in paragraphs:
-            text = p.get_text().strip()
-            if len(text) > 25:
-                cleaned_paragraphs.append(text)
-                
+        cleaned_paragraphs = [p.get_text().strip() for p in paragraphs if len(p.get_text().strip()) > 25]
         return "\n\n".join(cleaned_paragraphs)[:6000]
-    except Exception as e:
-        print(f"\n[-] Eroare la scanarea URL-ului {url}: {e}")
+    except Exception:
         return None
 
-if __name__ == "__main__":
-    if not ensure_ollama_running():
-        exit(1)
-        
-    db_articles = get_all_articles_from_today()
+def get_historical_context(actor):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT extracted_at, verbatim_evidence 
+        FROM extracted_events 
+        WHERE actor LIKE ? 
+        AND date(extracted_at) < date('now', 'localtime') 
+        ORDER BY extracted_at DESC LIMIT 5
+    """, (f"%{actor}%",))
+    rows = cursor.fetchall()
+    conn.close()
+    return [{"date": row[0], "past_statement": row[1]} for row in rows]
+
+# ==========================================
+# ETAPA 1: Preluare articole brute din RSS
+# ==========================================
+def run_rss_ingestion():
+    print("\n[+] ETAPA 1: Extragere RSS...")
+    conn = sqlite3.connect(DB_NAME)
+    new_count = 0
+    try:
+        cursor = conn.cursor()
+        for source, url in RSS_FEEDS.items():
+            try:
+                response = requests.get(url, headers=HEADERS, timeout=15)
+                if response.status_code != 200: 
+                    # Acum printăm dacă Agerpres (sau altul) pică
+                    print(f" -> {source}: EROARE (Status HTTP {response.status_code})")
+                    continue
+                
+                feed = feedparser.parse(response.content)
+                for entry in feed.entries:
+                    link = entry.get("link", "").strip()
+                    if not link: continue
+                    
+                    cursor.execute("SELECT 1 FROM raw_articles WHERE link = ?", (link,))
+                    if cursor.fetchone() is not None: continue
+                    
+                    title = entry.get("title", "No Title").strip()
+                    summary = clean_html(entry.get("summary", entry.get("description", "")))
+                    published = datetime.now().strftime("%Y-%m-%d")
+                    
+                    published_parsed = entry.get("published_parsed") or entry.get("updated_parsed")
+                    if published_parsed:
+                        published = time.strftime("%Y-%m-%d", published_parsed)
+
+                    cursor.execute("""
+                        INSERT OR IGNORE INTO raw_articles (source_name, title, link, summary, published_date)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (source, title, link, summary, published))
+                    if cursor.rowcount > 0: new_count += 1
+                print(f" -> {source}: Actualizat")
+            except requests.exceptions.Timeout:
+                print(f" -> {source}: EROARE (Timeout)")
+            except Exception as e:
+                print(f" -> {source}: EROARE ({e})")
+        conn.commit()
+    finally:
+        conn.close()
+    print(f"[*] S-au adăugat {new_count} articole noi azi.")
+
+# ==========================================
+# ETAPA 2: Selectorul și generarea dosarului
+# ==========================================
+def run_selector_and_dossier():
+    print("\n[+] ETAPA 2: Selectare OSINT și Generare Dosar Presă...")
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    cursor.execute("""
+        SELECT id, source_name, title, summary, link 
+        FROM raw_articles 
+        WHERE date(scraped_at, 'localtime') = ? OR published_date = ?
+        ORDER BY id DESC
+    """, (today_str, today_str))
+    db_articles = cursor.fetchall()
+    conn.close()
+
     if not db_articles:
-        print("[-] Nu s-au găsit articole în baza de date. Proces oprit.")
-        exit(1)
-        
-    print(f"[+] S-au încărcat {len(db_articles)} articole brute din baza de date.")
-    
-    # CONFIGURARE: Limita absolută mărită la 100 de articole trimise către prima conversație
+        print("[-] Nu există știri. Se oprește execuția.")
+        sys.exit(1)
+
     selection_input = []
-    source_tracker = {}
-    
     for a in db_articles:
-        src = a["source_name"]
-        cap = SOURCE_CAPS.get(src, 10)
+        title_lower = a[2].lower()
+        summary_lower = (a[3] or "").lower()
+        is_strat = any(kw in title_lower or kw in summary_lower for kw in STRATEGIC_KEYWORDS)
         
-        if source_tracker.get(src, 0) < cap:
-            short_summary = a["summary"][:100] + "..." if a["summary"] else "No summary available"
-            selection_input.append({
-                "title": a["title"],
-                "source": src,
-                "summary": short_summary,
-                "link": a["link"]
-            })
-            source_tracker[src] = source_tracker.get(src, 0) + 1
-            
-        if len(selection_input) >= 100:  # Limita absolută mărită la 100 de intrări
-            break
+        selection_input.append({
+            "title": f"{'[STRATEGIC SIGNAL] ' if is_strat else ''}{a[2]}",
+            "source": a[1],
+            "summary": (a[3][:100] + "...") if a[3] else "",
+            "link": a[4],
+            "is_strategic": is_strat
+        })
 
-    print(f"[*] S-au filtrat {len(selection_input)} articole echilibrate pe surse pentru a fi trimise modelului.")
+    selection_input = sorted(selection_input, key=lambda x: x["is_strategic"], reverse=True)
+    print(f"[*] {len(selection_input)} articole trimise către analiza de relevanță.")
 
-    # CONVERSAȚIA 1: Selecția macro realizată direct de Gemma
-    print("\n[*] Pornire Conversația 1: Analiză și selecție știri...")
     system_prompt_1 = (
         "You are a Senior Intelligence Director. Analyze the following list of raw daily news articles from Romania. "
-        "Select exactly 5 to 7 articles that represent the highest strategic importance: DOMESTIC POLITICS, MACROECONOMY, NATIONAL SECURITY, or SEVERE SYSTEMIC CRISES. "
+        "Select exactly 10 articles that represent the highest strategic importance: DOMESTIC POLITICS, MACROECONOMY, NATIONAL SECURITY, or SEVERE SYSTEMIC CRISES, AS WELL AS 1 OR 2 BIG NEWS FROM OTHER SUBJECTS THAT ARE OF NATIONAL IMPORTANCE. "
         "CRITICAL RULES: "
         "1. You MUST completely IGNORE and FILTER OUT any articles about: Reality TV shows, showbiz, weather forecasts, sports, minor accidents, or generic international news that doesn't involve Romania. "
-        "2. If there are only a few actual political/strategic articles, just pick those. Do not fill the quota with garbage news. "
+        "2. Prioritize articles marked with [STRATEGIC SIGNAL] as they contain highly relevant domestic intelligence elements. "
         "Output your selection STRICTLY as a JSON array containing objects with keys: 'title', 'link', 'source'."
     )
-    user_prompt_1 = f"Identify the top strategic news from this list: {json.dumps(selection_input)}"
     
-    raw_json_selection = call_ollama_stream(system_prompt_1, user_prompt_1, format_json=True)
+    raw_json = call_ollama(system_prompt_1, f"Identify top news: {json.dumps(selection_input)}", temp=0.0, top_p=0.1, json_schema="json")
     
-    # Parsarea selecției modelului
+    # Parsing fallbacks
     selected_list = []
     try:
-        json_clean = raw_json_selection
-        if "</think>" in json_clean:
-            json_clean = json_clean.split("</think>")[-1].strip()
-            
-        parsed_selection = json.loads(json_clean)
-        
-        # Logica robustă de detectare a listei în JSON (indiferent de denumirea cheilor)
-        if isinstance(parsed_selection, dict):
-            selected_list = parsed_selection.get("selected_articles", None)
-            if not selected_list:
-                # Căutăm dinamic orice cheie care conține o listă în interiorul dicționarului
-                for k, v in parsed_selection.items():
-                    if isinstance(v, list):
-                        selected_list = v
-                        break
-            if not selected_list:
-                selected_list = list(parsed_selection.values())[0]
-        elif isinstance(parsed_selection, list):
-            selected_list = parsed_selection
-            
-        if not isinstance(selected_list, list):
-            raise ValueError("Parsed selection is not a list")
-            
-    except Exception as e:
-        print(f"[-] Eșec la decodarea JSON-ului generat: {e}")
-        print("[*] Se trece la procesarea de siguranță...")
-        selected_list = selection_input[:5]
+        parsed = json.loads(raw_json)
+        if isinstance(parsed, dict) and "selected_articles" in parsed:
+            selected_list = parsed["selected_articles"]
+        elif isinstance(parsed, list):
+            selected_list = parsed
+    except Exception:
+        selected_list = selection_input[:10] # Fallback brut la primele 10 articole
 
-    # Descărcarea textului complet
-    print(f"\n[+] S-au selectat {len(selected_list)} articole.")
-    
     scraped_data_package = []
     for idx, item in enumerate(selected_list):
-        title = item.get("title", "No Title")
-        link = item.get("link", "")
-        source = item.get("source", item.get("source_name", "Unknown"))
-        
-        print(f" -> [{idx+1}/{len(selected_list)}] Descărcare text: {title[:50]}... ", end="", flush=True)
-        full_text = scrape_full_text(link)
-        
-        if full_text and len(full_text) > 100:
-            print("[SUCCES]")
-            scraped_data_package.append({
-                "title": title,
-                "source": source,
-                "full_text": full_text
-            })
-        else:
-            print("[EȘEC]")
+        title = item.get("title", "").replace("[STRATEGIC SIGNAL] ", "")
+        print(f" -> Descărcare text ({idx+1}/{len(selected_list)}): {title[:40]}...")
+        full_text = scrape_full_text(item.get("link", ""))
+        if full_text:
+            scraped_data_package.append({"title": title, "source": item.get("source", ""), "full_text": full_text})
 
     if not scraped_data_package:
-        print("[-] Nu s-a putut descărca textul integral. Proces oprit.")
-        exit(1)
+        print("[-] Nu s-au putut descărca textele surselor. Oprim execuția.")
+        sys.exit(1)
 
-    # CONVERSAȚIA 2: Generarea Dosarului
-    print("\n[*] Pornire Conversația 2: Generare dosar de presă bazat pe textele integrale...")
-    
     system_prompt_2 = (
         "You are a Master OSINT Journalist and Analyst. Read the full scraped text of the selected news articles "
         "and generate a comprehensive, highly detailed news summary dossier in Romanian.\n\n"
@@ -278,22 +397,195 @@ if __name__ == "__main__":
         "[Write a comprehensive, deep, and highly informative narrative summary in Romanian. This summary must "
         "preserve the political context, key figures, critical facts, and include direct verbatim Romanian quotes from "
         "the provided text. Keep it strictly professional, objective, and analytical. Write at least 2-3 detailed paragraphs for each story to ensure deep coverage.]\n"
-        "(Sursa: [Source Name] - [Current Date, e.g., 10 Iunie 2026])\n\n"
+        "(Sursa: [Source Name] - [Current Date])\n\n"
         "CRITICAL FORMAT RULES:\n"
         "1. Do not use any markdown headers (such as #, ##, ###) or bold any words inside the title line or text.\n"
-        "2. Do not write any conversational intros or outros (like 'Sure, here is your summary'). Start directly with 'ȘTIREA 1:'.\n"
+        "2. Do not write any conversational intros or outros. Start directly with 'ȘTIREA 1:'.\n"
         "3. Keep Romanian quotes completely verbatim."
     )
     
-    user_prompt_2 = f"Generate the structured news summaries for these fully scraped articles:\n\n{json.dumps(scraped_data_package)}"
+    print("\n[*] Generare Dosar Consolidat...")
+    dossier_text = call_ollama(system_prompt_2, json.dumps(scraped_data_package), temp=0.0, top_p=0.1)
     
-    dossier_output = call_ollama_stream(system_prompt_2, user_prompt_2, format_json=False)
+    with open("dossier_for_agent_1.txt", "w", encoding="utf-8") as f:
+        f.write(dossier_text)
     
-    output_file = "dossier_for_agent_1.txt"
-    with open(output_file, "w", encoding="utf-8") as f:
-        final_text = dossier_output
-        if "</think>" in final_text:
-            final_text = final_text.split("</think>")[-1].strip()
-        f.write(final_text)
+    return dossier_text
+
+# ==========================================
+# ETAPA 3: AGENT PIPELINE
+# ==========================================
+def run_agents(dossier_text):
+    if not dossier_text.strip():
+        print("[-] Dosarul generat este complet gol. Posibil eroare de generare OLLAMA.")
+        sys.exit(1)
+
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    # --- AGENT 1: Extractor ---
+    print("\n[+] RULARE AGENT 1 (Extragerea Structurată a Entităților)...")
+    prompt_sys_1 = (
+        "You are an elite OSINT Information Extractor specialized in the Romanian geopolitical, economic, and social landscape. "
+        "Your task is to extract key events, declarations, and actions that have the potential to influence political dynamics, "
+        "national security, economic stability, public policy, or public sentiment in Romania.\n"
+        "You must extract:\n"
+        "1. Core political actions, claims, and declarations by politicians or parties.\n"
+        "2. Major economic, financial, and regulatory events.\n"
+        "3. National security, defense, and border developments.\n"
+        "4. Significant social, humanitarian, or systemic crises.\n"
+        "RULES:\n"
+        "1. Do not translate the quotes. The 'verbatim_evidence' MUST be an exact, copy-pasted substring from the Romanian text.\n"
+        "2. All other fields (topic, action, actor) must be written in English.\n"
+        "3. If no event is present, output an empty array [].\n"
+        "4. Output ONLY valid JSON matching the schema."
+    )
+    
+    resp_1 = call_ollama(prompt_sys_1, dossier_text, temp=0.0, top_p=0.1, json_schema=SCHEMA_AGENT_1)
+    events_data = []
+    try:
+        events_data = json.loads(resp_1).get("extracted_events", [])
+        for ev in events_data:
+            cursor.execute("""
+                INSERT INTO extracted_events (actor, action, verbatim_evidence, topic)
+                VALUES (?, ?, ?, ?)
+            """, (ev.get("actor"), ev.get("action"), ev.get("verbatim_evidence"), ev.get("topic")))
+        conn.commit()
+    except Exception as e:
+        print(f"[-] Eroare parsare Agent 1: {e}\nPayload primit: {resp_1}")
+
+    # --- AGENT 2: Fact-Checker / Archivist ---
+    print("\n[+] RULARE AGENT 2 (Arhivist & Detectare Contradicții)...")
+    all_anomalies = []
+    if events_data:
+        for ev in events_data:
+            actor = ev.get("actor", "")
+            history = get_historical_context(actor)
+            if not history:
+                print(f" -> Fără istoric pentru: {actor}")
+                continue
+                
+            print(f" -> Verificare istoric pentru: {actor} (Găsite {len(history)} declarații anterioare)")
+            
+            prompt_sys_2 = (
+                "You are an Automated Political Archivist. You will receive:\n"
+                "1. 'TODAY_EVENT': A JSON object of a claim made today.\n"
+                "2. 'HISTORICAL_CONTEXT': A JSON array of past statements made by the same actor.\n"
+                "Your job is to detect contradictions, policy reversals, or strategic silence. Write your analysis in English, but keep quotes in Romanian.\n"
+                "RULES:\n"
+                "1. Calculate a 'contradiction_score' from 0.0 to 1.0.\n"
+                "2. If the score is below 0.5, output an empty JSON array []. Do not flag minor things.\n"
+                "3. Output ONLY valid JSON."
+            )
+            user_msg_2 = json.dumps({"TODAY_EVENT": ev, "HISTORICAL_CONTEXT": history})
+            
+            resp_2 = call_ollama(prompt_sys_2, user_msg_2, temp=0.0, top_p=0.1, json_schema=SCHEMA_AGENT_2)
+            try:
+                anoms = json.loads(resp_2).get("anomalies", [])
+                for anom in anoms:
+                    cursor.execute("""
+                        INSERT INTO historical_anomalies (anomaly_type, target, past_statement, current_statement, contradiction_score, analyst_note)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """, (anom.get("anomaly_type"), anom.get("target"), anom.get("past_statement"), anom.get("current_statement"), anom.get("contradiction_score"), anom.get("analyst_note")))
+                conn.commit()
+                all_anomalies.extend(anoms)
+            except Exception as e:
+                print(f"[-] Eroare parsare Agent 2 pentru {actor}: {e}\nPayload primit: {resp_2}")
+    else:
+        print(" -> Nu există date de la Agent 1 pentru procesare.")
+
+    # --- AGENT 3: Red Teamer ---
+    print("\n[+] RULARE AGENT 3 (Red Teamer)...")
+    threats_data = []
+    if events_data:
+        prompt_sys_3 = (
+            "You are a ruthless, hostile Political Strategist (Red Teamer). \n"
+            "You will receive the structured JSON data of today's political events and identified contradictions.\n"
+            "Your job is to identify 'Threat Vectors'. Look at the data and determine:\n"
+            "1. Who is most vulnerable right now?\n"
+            "2. How can an opposing party weaponize these events tomorrow?\n"
+            "3. Is anyone using 'Parasitic Framing' (hijacking another party's narrative)?\n"
+            "Write your analysis strictly in English. Output ONLY valid JSON."
+        )
         
-    print(f"[+] Proces finalizat. Rezultatele au fost salvate în: {output_file}")
+        payload_3 = json.dumps({"agent_1_extracted_events": events_data, "agent_2_anomalies": all_anomalies})
+        resp_3 = call_ollama(prompt_sys_3, payload_3, temp=0.2, top_p=0.5, json_schema=SCHEMA_AGENT_3)
+        
+        try:
+            threats_data = json.loads(resp_3).get("threat_vectors", [])
+            for t in threats_data:
+                cursor.execute("""
+                    INSERT INTO threat_vectors (threat_type, vulnerable_actor, exploiting_actor, description)
+                    VALUES (?, ?, ?, ?)
+                """, (t.get("threat_type"), t.get("vulnerable_actor"), t.get("exploiting_actor"), t.get("description")))
+            conn.commit()
+        except Exception as e:
+            print(f"[-] Eroare parsare Agent 3: {e}\nPayload primit: {resp_3}")
+    else:
+        print(" -> Nu există date de la Agent 1 pentru procesare.")
+
+    # --- AGENT 4: Director / Synthesizer ---
+    print("\n[+] RULARE AGENT 4 (Sinteza Executivă)...")
+    if events_data:
+        prompt_sys_4 = (
+            "You are a Senior Political Intelligence Analyst specialized in Romanian domestic politics and Open Source Intelligence (OSINT). "
+            "Your role is to synthesize raw daily data into a highly sophisticated, executive-level political intelligence briefing.\n\n"
+            "You will receive a JSON payload containing:\n"
+            "1. 'agent_1_extracted_events': Raw daily events and quotes.\n"
+            "2. 'agent_2_anomalies': Historical contradictions and deviations in politician behavior.\n"
+            "3. 'agent_3_threat_vectors': Hostile framing, vulnerabilities, and strategic leverage points.\n\n"
+            "CORE ANALYTICAL DIRECTIVES:\n"
+            "1. SILENCE IS A SIGNAL: If a major political actor is unusually silent about a major crisis involving their rivals, analyze this as strategic silence.\n"
+            "2. DETECT PARASITIC FRAMING: Do not mistake tactical voting for ideological alliances. If two opposing parties vote together, verify if one party is parazitizing the other's initiative.\n"
+            "3. WEAPONIZE CONTRADICTIONS: Look at historical quotes provided in the anomalies. Highlight when a politician's current defense directly violates their past statements.\n"
+            "4. BE UNBIASED AND COLD: Write with absolute objectivity. Avoid emotional language. Speak in terms of leverage, public perception management, risk, and political survival.\n\n"
+            "OUTPUT CONSTRAINTS:\n"
+            "- Your response must be written entirely in ROMANIAN.\n"
+            "- Follow the exact Markdown structure provided below.\n"
+            "- Do not invent any outside news events, names, or quotes. Rely strictly on the provided JSON payload.\n"
+            "- Generate exactly 5 predictions in Section 4. Each prediction must have a numerical Confidence Score (e.g., 85%) and a logical justification based on the raw data.\n\n"
+            "MARKDOWN STRUCTURE TO USE:\n\n"
+            "# 🇷🇴 Sinteza Politică Locală: [Insert Date from JSON]\n\n"
+            "## 1. REZUMATUL ZILEI (TL;DR)\n* [Provide a concise, 3-sentence summary of the most critical political developments, highlighting the underlying reality behind the surface news.]\n\n"
+            "## 2. DINAMICA PUTERII ȘI ALIANȚE SUBTERANE\n* [Analyze the power dynamics. Explain the strategic meaning behind any silence, backdoor negotiations, or tactical voting behavior identified in the raw data.]\n\n"
+            "## 3. EXPLOATAREA EVENIMENTELOR SOCIALE (Black Swan Tracking)\n* [Explain how today's social tragedies, accidents, or infrastructure failures are being weaponized or managed by different actors. Identify who is gaining or losing narrative control.]\n\n"
+            "## 4. PREDICȚII ȘI ANOMALII PENTRU MÂINE\n"
+            "* **Ce urmărim mâine: [Prediction Title 1]**\n  * *Confidence Score:* [X%]\n  * *Justificare:* [Analytical justification linking raw data and vulnerabilities to this outcome]\n"
+            "* **Ce urmărim mâine: [Prediction Title 2]**\n  * *Confidence Score:* [X%]\n  * *Justificare:* [Analytical justification]\n"
+            "* **Ce urmărim mâine: [Prediction Title 3]**\n  * *Confidence Score:* [X%]\n  * *Justificare:* [Analytical justification]\n"
+            "* **Ce urmărim mâine: [Prediction Title 4]**\n  * *Confidence Score:* [X%]\n  * *Justificare:* [Analytical justification]\n"
+            "* **Ce urmărim mâine: [Prediction Title 5]**\n  * *Confidence Score:* [X%]\n  * *Justificare:* [Analytical justification]\n\n"
+            "**Nivel de Volatilitate:** [Scăzut / Mediu / Ridicat] - [Provide a brief, 1-sentence explanation of the volatility rating based on the day's events.]"
+        )
+        
+        payload_4 = json.dumps({
+            "current_date": datetime.now().strftime("%Y-%m-%d"),
+            "agent_1_extracted_events": events_data,
+            "agent_2_anomalies": all_anomalies,
+            "agent_3_threat_vectors": threats_data
+        })
+        
+        final_briefing = call_ollama(prompt_sys_4, payload_4, temp=0.0, top_p=0.1)
+        
+        today_date = datetime.now().strftime('%Y-%m-%d')
+        output_filename = f"Sinteza_Politica_{today_date}.md"
+        with open(output_filename, "w", encoding="utf-8") as f:
+            f.write(final_briefing)
+            
+        print(f"\n[+] GATA! Dosarul final a fost generat și salvat cu succes: {output_filename}")
+    else:
+        print("[-] Operațiune abandonată pentru Agent 4. Nu s-a putut redacta sinteza din lipsă de date.")
+
+    conn.close()
+
+if __name__ == "__main__":
+    print("==================================================")
+    print("      🇷🇴 INIȚIALIZARE PIPELINE OSINT COMPLET      ")
+    print("==================================================")
+    ensure_database()
+    if not ensure_ollama_running():
+        sys.exit(1)
+        
+    run_rss_ingestion()
+    dossier = run_selector_and_dossier()
+    run_agents(dossier)
