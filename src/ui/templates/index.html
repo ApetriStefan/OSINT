@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="ro" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RO-INTEL — Platformă de Analiză Politică</title>
+  
+  <!-- Typography: Inter for clean professional UI, JetBrains Mono strictly for code, SQL, IDs, and thinking streams -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#eff6ff',
+              100: '#dbeafe',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Marked.js & DOMPurify -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.9/dist/purify.min.js"></script>
+
+  <!-- D3.js for Connected Papers Network Graph -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+
+  <!-- Local Custom CSS -->
+  <link rel="stylesheet" href="/static/css/styles.css?v=2">
+</head>
+<body style="height: 100vh; min-height: 100vh; overflow: hidden;" class="h-screen min-h-screen flex bg-slate-50 dark:bg-[#0b0f19] text-slate-900 dark:text-slate-100 font-sans antialiased selection:bg-blue-500/20 selection:text-blue-700 dark:selection:text-blue-300 overflow-hidden">
+
+  <!-- ==================== LEFT SIDEBAR NAVIGATION ==================== -->
+  <aside style="height: 100vh; min-height: 100vh;" class="no-print w-64 h-screen min-h-screen flex-none border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0f172a] flex flex-col justify-between z-30 select-none">
+    
+    <div>
+      <!-- Brand & Platform Header -->
+      <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-7 h-7 rounded-md bg-blue-600 flex items-center justify-center text-white font-bold text-sm tracking-tighter">
+            RO
+          </div>
+          <div>
+            <div class="font-bold text-sm tracking-tight text-slate-900 dark:text-slate-100">
+              RO-INTEL
+            </div>
+            <div class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Analiză Politică & OSINT</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Navigation Links -->
+      <nav class="p-3 space-y-1">
+        <button data-route="overview" class="sidebar-nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs font-medium transition text-left">
+          <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+          <span>Prezentare Generală</span>
+        </button>
+
+        <button data-route="live" class="sidebar-nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs font-medium transition text-left">
+          <i data-lucide="activity" class="w-4 h-4"></i>
+          <span>Execuție Live</span>
+        </button>
+
+        <button data-route="briefings" class="sidebar-nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs font-medium transition text-left">
+          <i data-lucide="file-text" class="w-4 h-4"></i>
+          <span>Sinteze Politice</span>
+        </button>
+
+        <button data-route="graph" class="sidebar-nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs font-medium transition text-left">
+          <i data-lucide="share-2" class="w-4 h-4"></i>
+          <span>Hartă Relațională</span>
+        </button>
+        <button data-route="database" class="sidebar-nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs font-medium transition text-left">
+          <i data-lucide="database" class="w-4 h-4"></i>
+          <span>Bază de Date</span>
+        </button>
+
+        <button data-route="insights" class="sidebar-nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs font-medium transition text-left">
+          <i data-lucide="shield-alert" class="w-4 h-4"></i>
+          <span>Amenințări & Anomalii</span>
+        </button>
+
+        <button data-route="runs" class="sidebar-nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs font-medium transition text-left">
+          <i data-lucide="history" class="w-4 h-4"></i>
+          <span>Istoric Rulări</span>
+        </button>
+      </nav>
+    </div>
+
+    <!-- Sidebar Bottom Status & Settings -->
+    <div class="p-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
+      
+      <!-- LLM Mini Status Pill -->
+      <div class="px-3 py-2 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-sans text-slate-600 dark:text-slate-400 flex items-center justify-between">
+        <div class="flex items-center gap-1.5 truncate">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-none"></span>
+          <span id="sidebar-ollama-model" class="truncate font-medium">Ollama Conectat</span>
+        </div>
+        <span class="text-slate-400 dark:text-slate-500 text-[10px] flex-none">131k ctx</span>
+      </div>
+
+      <!-- Quick Purge Action in Sidebar -->
+      <button onclick="App.confirmPurgeSystem()" class="w-full flex items-center justify-between px-3 py-1.5 rounded-md text-[11px] font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-dashed border-rose-200 dark:border-rose-900/40 transition cursor-pointer" title="Purjează SQLite, ChromaDB și rapoartele vechi">
+        <span class="flex items-center gap-1.5">
+          <i data-lucide="trash-2" class="w-3 h-3"></i>
+          <span>Purjare Date Sistem</span>
+        </span>
+      </button>
+
+      <!-- Theme Switcher -->
+      <div class="flex items-center justify-between pt-1 text-xs">
+        <button id="btn-toggle-theme" class="flex items-center gap-1.5 px-2 py-1 rounded text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+          <i data-lucide="sun-moon" class="w-3.5 h-3.5"></i>
+          <span id="current-theme-label">Auto</span>
+        </button>
+
+        <span class="text-[11px] text-slate-400 font-sans">RO-INTEL</span>
+      </div>
+
+    </div>
+
+  </aside>
+
+  <!-- ==================== MAIN CONTENT WRAPPER ==================== -->
+  <div class="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+    
+    <!-- Mock Mode Warning Banner (shown only when ?mock=1) -->
+    <div id="mock-warning-banner" class="hidden no-print bg-amber-50 dark:bg-amber-950/60 border-b border-amber-200 dark:border-amber-900/60 px-6 py-2 text-xs text-amber-800 dark:text-amber-300 flex items-center justify-between z-30">
+      <div class="flex items-center gap-2">
+        <i data-lucide="info" class="w-4 h-4 text-amber-600 dark:text-amber-400 flex-none"></i>
+        <span><strong>Date demonstrative (?mock=1)</strong>: Datele prezentate sunt mostre simulate pentru testarea interfeței și nu reflectă datele din baza de date reală.</span>
+      </div>
+      <a href="/" class="text-amber-900 dark:text-amber-200 underline font-medium hover:text-amber-700 text-xs">Comută pe date reale</a>
+    </div>
+
+    <!-- Top Bar -->
+    <header class="no-print h-14 flex-none border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-sm px-6 flex items-center justify-between z-20">
+      
+      <!-- Breadcrumb & View Title -->
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-slate-400 font-medium">Platformă</span>
+        <span class="text-slate-300 dark:text-slate-600">/</span>
+        <h2 id="view-title" class="text-sm font-semibold text-slate-900 dark:text-slate-100">Prezentare Generală</h2>
+      </div>
+
+      <!-- Telemetry Health Badges -->
+      <div class="flex items-center gap-3 text-xs">
+        
+        <!-- Ollama Status -->
+        <div class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-sans text-[11px] font-medium">
+          <span id="header-ollama-dot" class="w-2 h-2 rounded-full bg-emerald-500"></span>
+          <span id="header-ollama-text">Ollama: gemma-4-e4b</span>
+        </div>
+
+        <!-- SQLite WAL Status -->
+        <div id="header-wal-badge" class="hidden md:inline-block px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-sans text-[11px] font-medium">
+          SQLite WAL
+        </div>
+
+        <!-- Vector Store -->
+        <div id="header-vector-badge" class="hidden lg:inline-block px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-sans text-[11px] font-medium">
+          ChromaDB (0)
+        </div>
+
+        <!-- Pipeline Status Pill -->
+        <span id="header-pipeline-status" class="px-2 py-0.5 rounded text-xs font-sans font-medium bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+          Inactiv
+        </span>
+
+        <!-- Purge System Data Button -->
+        <button id="btn-header-purge" onclick="App.confirmPurgeSystem()" class="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 transition cursor-pointer" title="Purjează ambele baze de date (SQLite & ChromaDB) și toate rapoartele">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          <span class="hidden sm:inline">Purjare Date</span>
+        </button>
+
+        <!-- EET Bucharest Clock -->
+        <div id="top-bar-clock" class="font-sans text-xs text-slate-500 tabular-nums border-l border-slate-200 dark:border-slate-800 pl-3">
+          --:--:-- EET
+        </div>
+
+      </div>
+
+    </header>
+
+    <!-- Main Views Router Container -->
+    <main class="flex-1 overflow-y-auto p-6 min-h-0">
+      
+      <!-- ============================================================== -->
+      <!-- VIEW 1: OVERVIEW (#/overview)                                  -->
+      <!-- ============================================================== -->
+      <section id="view-overview" class="view-section space-y-6 max-w-7xl mx-auto min-h-[calc(100vh-6.5rem)] flex flex-col">
+        
+        <!-- Top Stats Row (Real DB Tables) -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          
+          <div class="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+            <div class="text-xs text-slate-500 font-medium">Articole Brute (RSS)</div>
+            <div id="stat-articles-total" class="text-2xl font-semibold font-sans tracking-tight tabular-nums text-slate-900 dark:text-slate-100 mt-1"><span class="inline-block skeleton h-7 w-20"></span></div>
+            <div class="text-[11px] text-slate-400 font-mono mt-1">raw_articles</div>
+          </div>
+
+          <div class="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+            <div class="text-xs text-slate-500 font-medium">Evenimente Structurate</div>
+            <div id="stat-events-total" class="text-2xl font-semibold font-sans tracking-tight tabular-nums text-slate-900 dark:text-slate-100 mt-1"><span class="inline-block skeleton h-7 w-16"></span></div>
+            <div class="text-[11px] text-slate-400 font-mono mt-1">extracted_events</div>
+          </div>
+
+          <div class="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+            <div class="text-xs text-slate-500 font-medium">Contradicții Istorice</div>
+            <div id="stat-anomalies-total" class="text-2xl font-semibold font-sans tracking-tight tabular-nums text-slate-900 dark:text-slate-100 mt-1"><span class="inline-block skeleton h-7 w-12"></span></div>
+            <div class="text-[11px] text-slate-400 font-mono mt-1">historical_anomalies</div>
+          </div>
+
+          <div class="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+            <div class="text-xs text-slate-500 font-medium">Vectori de Amenințare</div>
+            <div id="stat-threats-total" class="text-2xl font-semibold font-sans tracking-tight tabular-nums text-slate-900 dark:text-slate-100 mt-1"><span class="inline-block skeleton h-7 w-12"></span></div>
+            <div class="text-[11px] text-slate-400 font-mono mt-1">threat_vectors</div>
+          </div>
+
+        </div>
+
+        <!-- Run Controls & System Health (2 Cols) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          
+          <!-- Run Controls Card (7 cols) -->
+          <div class="lg:col-span-7 p-5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm space-y-4">
+            <div>
+              <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Control Execuție Pipeline</h3>
+              <p class="text-xs text-slate-500 mt-0.5">Lansează un proces asincron de colectare, extracție și sinteză politică.</p>
+            </div>
+
+            <form id="overview-run-form" class="space-y-4 pt-2">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                
+                <!-- Stage selector -->
+                <div>
+                  <label for="run-stage-select" class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Etapă Pipeline
+                  </label>
+                  <select id="run-stage-select" class="w-full text-xs rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    <option value="all">Pipeline Complet (Ingest ➔ Sinteză)</option>
+                    <option value="ingest">Doar Ingestie RSS (Scraping)</option>
+                    <option value="select">Doar Selecție Dosar de Presă</option>
+                    <option value="agents">Doar Extracție & Analiză Multi-Agent</option>
+                    <option value="synthesize">Doar Sinteză Executivă & Corectură</option>
+                  </select>
+                </div>
+
+                <!-- Date picker with unambiguous preview and quick today button -->
+                <div>
+                  <div class="flex items-center justify-between mb-1">
+                    <label for="run-date-input" class="block text-xs font-medium text-slate-700 dark:text-slate-300">
+                      Dată de Lucru (Opțional)
+                    </label>
+                    <button type="button" id="btn-quick-date-today" class="text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline">
+                      Azi (6 nov. 2026)
+                    </button>
+                  </div>
+                  <input type="date" id="run-date-input" class="w-full text-xs rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-1.5 font-sans text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                  <div id="run-date-preview" class="text-[11px] font-medium text-blue-600 dark:text-blue-400 mt-1 flex items-center gap-1.5">
+                    <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+                    <span id="run-date-preview-text">Dată selectată: Automat (Azi - 6 Noiembrie 2026)</span>
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- Form validation message -->
+              <div id="run-form-error" class="hidden text-xs text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/30 p-2.5 rounded border border-rose-200 dark:border-rose-900/50"></div>
+
+              <div class="flex items-center gap-3 pt-2">
+                <button type="submit" id="btn-submit-run" class="px-4 py-2 text-xs font-semibold rounded-md bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition">
+                  Lansează Execuție
+                </button>
+                <button type="button" id="btn-cancel-run" class="px-3 py-2 text-xs font-medium rounded-md border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition">
+                  Oprește Execuția
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- System Health Card (5 cols) -->
+          <div class="lg:col-span-5 p-5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm space-y-3">
+            <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Stare Infrastructură</h3>
+            
+            <div class="space-y-2 text-xs font-sans">
+              <div class="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
+                <span class="text-slate-500">Model LLM Principal</span>
+                <span id="health-llm-model" class="font-medium text-slate-800 dark:text-slate-200">gemma-4-e4b</span>
+              </div>
+              <div class="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
+                <span class="text-slate-500">Fereastră Context Token</span>
+                <span id="health-llm-ctx" class="font-medium text-blue-600 dark:text-blue-400">131,072 tokens</span>
+              </div>
+              <div class="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
+                <span class="text-slate-500">Model Embeddings</span>
+                <span id="health-embed-model" class="text-slate-800 dark:text-slate-200">nomic-embed-text</span>
+              </div>
+              <div class="flex justify-between py-1.5">
+                <span class="text-slate-500">Stocare Bază de Date</span>
+                <span id="health-db-status" class="text-slate-800 dark:text-slate-200">SQLite WAL Mode</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Latest Briefing Preview Card -->
+        <div class="p-5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm space-y-2">
+          <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Ultima Sinteză Disponibilă</div>
+          <div id="overview-latest-briefing" class="pt-1">
+            <div class="space-y-2 py-4">
+              <div class="skeleton h-5 w-1/4"></div>
+              <div class="skeleton h-4 w-3/4"></div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ============================================================== -->
+      <!-- VIEW 2: LIVE RUN & AGENT STREAMING (#/live)                    -->
+      <!-- ============================================================== -->
+      <section id="view-live" class="view-section hidden space-y-6 max-w-7xl mx-auto min-h-[calc(100vh-6.5rem)] flex flex-col">
+        
+        <!-- Stage Stepper (Real-time driven) -->
+        <div class="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+          <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Etape Pipeline</div>
+          
+          <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs font-sans">
+            
+            <div id="step-ingest" class="p-2.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex flex-col justify-between space-y-2">
+              <div class="text-slate-500 text-[11px] font-medium">1. Ingestie RSS</div>
+              <span class="step-status-badge px-2 py-0.5 rounded text-[10px] font-medium bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 w-fit">Așteptare</span>
+            </div>
+
+            <div id="step-select" class="p-2.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex flex-col justify-between space-y-2">
+              <div class="text-slate-500 text-[11px] font-medium">2. Selecție Știri</div>
+              <span class="step-status-badge px-2 py-0.5 rounded text-[10px] font-medium bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 w-fit">Așteptare</span>
+            </div>
+
+            <div id="step-agents" class="p-2.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex flex-col justify-between space-y-2">
+              <div class="text-slate-500 text-[11px] font-medium">3. Analiză Agenți (1-3)</div>
+              <span class="step-status-badge px-2 py-0.5 rounded text-[10px] font-medium bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 w-fit">Așteptare</span>
+            </div>
+
+            <div id="step-synthesize" class="p-2.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex flex-col justify-between space-y-2">
+              <div class="text-slate-500 text-[11px] font-medium">4. Sinteză Executivă (4-5)</div>
+              <span class="step-status-badge px-2 py-0.5 rounded text-[10px] font-medium bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 w-fit">Așteptare</span>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Realtime Per-Agent Cards Grid -->
+        <div class="space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Flux Agenți Inteligenți</h3>
+            <div class="flex items-center gap-3">
+              <button id="btn-toggle-autofollow" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">
+                Auto-follow: Activ
+              </button>
+              <span id="stream-connection-badge" class="px-2 py-0.5 rounded text-xs font-sans font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                SSE Inactiv
+              </span>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            
+            <!-- Selector Card -->
+            <div id="agent-card-selector" class="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm space-y-3">
+              <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                <span class="text-xs font-semibold text-slate-900 dark:text-slate-100">Selector Dosar Presă</span>
+                <div class="flex items-center gap-2">
+                  <span class="agent-timing text-[11px] font-sans tabular-nums text-slate-400">inactiv</span>
+                  <span class="agent-status-badge px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">Inactiv</span>
+                </div>
+              </div>
+
+              <div class="agent-thinking-stream hidden p-2.5 rounded bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800/60 max-h-28 overflow-y-auto font-mono text-[11px] text-slate-500 italic leading-relaxed">
+                <span class="text-[10px] uppercase font-sans font-semibold text-slate-400 not-italic block mb-0.5">G?ndire (Reasoning):</span>
+                <span class="thinking-text"></span>
+              </div>
+
+              <div class="agent-output-stream p-2.5 rounded bg-white dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800/80 min-h-[70px] max-h-40 overflow-y-auto font-sans text-xs text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap"><div class="agent-idle-msg text-xs text-slate-400 dark:text-slate-500 italic">Inactiv. Porniți o execuție pentru a vizualiza datele generate de acest agent.</div></div>
+            </div>
+
+            <!-- Agent 1 Card -->
+            <div id="agent-card-extractor" class="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm space-y-3">
+              <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                <span class="text-xs font-semibold text-slate-900 dark:text-slate-100">Agent 1: Extractor Entități</span>
+                <div class="flex items-center gap-2">
+                  <span class="agent-timing text-[11px] font-sans tabular-nums text-slate-400">inactiv</span>
+                  <span class="agent-status-badge px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">Inactiv</span>
+                </div>
+              </div>
+
+              <div class="agent-thinking-stream hidden p-2.5 rounded bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800/60 max-h-28 overflow-y-auto font-mono text-[11px] text-slate-500 italic leading-relaxed">
+                <span class="text-[10px] uppercase font-sans font-semibold text-slate-400 not-italic block mb-0.5">G?ndire (Reasoning):</span>
+                <span class="thinking-text"></span>
+              </div>
+
+              <div class="agent-output-stream p-2.5 rounded bg-white dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800/80 min-h-[70px] max-h-40 overflow-y-auto font-sans text-xs text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap"><div class="agent-idle-msg text-xs text-slate-400 dark:text-slate-500 italic">Inactiv. Porniți o execuție pentru a vizualiza datele generate de acest agent.</div></div>
+            </div>
+
+            <!-- Agent 2 Card -->
+            <div id="agent-card-archivist" class="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm space-y-3">
+              <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                <span class="text-xs font-semibold text-slate-900 dark:text-slate-100">Agent 2: Arhivist & Anomalii</span>
+                <div class="flex items-center gap-2">
+                  <span class="agent-timing text-[11px] font-sans tabular-nums text-slate-400">inactiv</span>
+                  <span class="agent-status-badge px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">Inactiv</span>
+                </div>
+              </div>
+
+              <div class="agent-thinking-stream hidden p-2.5 rounded bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800/60 max-h-28 overflow-y-auto font-mono text-[11px] text-slate-500 italic leading-relaxed">
+                <span class="text-[10px] uppercase font-sans font-semibold text-slate-400 not-italic block mb-0.5">G?ndire (Reasoning):</span>
+                <span class="thinking-text"></span>
+              </div>
+
+              <div class="agent-output-stream p-2.5 rounded bg-white dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800/80 min-h-[70px] max-h-40 overflow-y-auto font-sans text-xs text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap"><div class="agent-idle-msg text-xs text-slate-400 dark:text-slate-500 italic">Inactiv. Porniți o execuție pentru a vizualiza datele generate de acest agent.</div></div>
+            </div>
+
+            <!-- Agent 3 Card -->
+            <div id="agent-card-red_team" class="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm space-y-3">
+              <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                <span class="text-xs font-semibold text-slate-900 dark:text-slate-100">Agent 3: Red Team Strategist</span>
+                <div class="flex items-center gap-2">
+                  <span class="agent-timing text-[11px] font-sans tabular-nums text-slate-400">inactiv</span>
+                  <span class="agent-status-badge px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">Inactiv</span>
+                </div>
+              </div>
+
+              <div class="agent-thinking-stream hidden p-2.5 rounded bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800/60 max-h-28 overflow-y-auto font-mono text-[11px] text-slate-500 italic leading-relaxed">
+                <span class="text-[10px] uppercase font-sans font-semibold text-slate-400 not-italic block mb-0.5">G?ndire (Reasoning):</span>
+                <span class="thinking-text"></span>
+              </div>
+
+              <div class="agent-output-stream p-2.5 rounded bg-white dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800/80 min-h-[70px] max-h-40 overflow-y-auto font-sans text-xs text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap"><div class="agent-idle-msg text-xs text-slate-400 dark:text-slate-500 italic">Inactiv. Porniți o execuție pentru a vizualiza datele generate de acest agent.</div></div>
+            </div>
+
+            <!-- Agent 4 Card -->
+            <div id="agent-card-director" class="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm space-y-3">
+              <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                <span class="text-xs font-semibold text-slate-900 dark:text-slate-100">Agent 4: Director Sinteză</span>
+                <div class="flex items-center gap-2">
+                  <span class="agent-timing text-[11px] font-sans tabular-nums text-slate-400">inactiv</span>
+                  <span class="agent-status-badge px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">Inactiv</span>
+                </div>
+              </div>
+
+              <div class="agent-thinking-stream hidden p-2.5 rounded bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800/60 max-h-28 overflow-y-auto font-mono text-[11px] text-slate-500 italic leading-relaxed">
+                <span class="text-[10px] uppercase font-sans font-semibold text-slate-400 not-italic block mb-0.5">G?ndire (Reasoning):</span>
+                <span class="thinking-text"></span>
+              </div>
+
+              <div class="agent-output-stream p-2.5 rounded bg-white dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800/80 min-h-[70px] max-h-40 overflow-y-auto font-sans text-xs text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap"><div class="agent-idle-msg text-xs text-slate-400 dark:text-slate-500 italic">Inactiv. Porniți o execuție pentru a vizualiza datele generate de acest agent.</div></div>
+            </div>
+
+            <!-- Agent 5 Card -->
+            <div id="agent-card-copyeditor" class="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm space-y-3">
+              <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                <span class="text-xs font-semibold text-slate-900 dark:text-slate-100">Agent 5: Redactor Diacritice</span>
+                <div class="flex items-center gap-2">
+                  <span class="agent-timing text-[11px] font-sans tabular-nums text-slate-400">inactiv</span>
+                  <span class="agent-status-badge px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">Inactiv</span>
+                </div>
+              </div>
+
+              <div class="agent-thinking-stream hidden p-2.5 rounded bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800/60 max-h-28 overflow-y-auto font-mono text-[11px] text-slate-500 italic leading-relaxed">
+                <span class="text-[10px] uppercase font-sans font-semibold text-slate-400 not-italic block mb-0.5">G?ndire (Reasoning):</span>
+                <span class="thinking-text"></span>
+              </div>
+
+              <div class="agent-output-stream p-2.5 rounded bg-white dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800/80 min-h-[70px] max-h-40 overflow-y-auto font-sans text-xs text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap"><div class="agent-idle-msg text-xs text-slate-400 dark:text-slate-500 italic">Inactiv. Porniți o execuție pentru a vizualiza datele generate de acest agent.</div></div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Live Terminal Log Stream Pane -->
+        <div class="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm space-y-2">
+          <div class="flex items-center justify-between text-xs pb-2 border-b border-slate-100 dark:border-slate-800">
+            <span class="font-semibold text-slate-700 dark:text-slate-300">Jurnal</span>
+            <button onclick="document.getElementById('live-log-container').innerHTML='<div class=\'empty-log-msg text-xs text-slate-400 dark:text-slate-500 italic p-2\'>Jurnalul a fost golit.</div>'" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-[11px]">
+              Șterge jurnalul
+            </button>
+          </div>
+          <div id="live-log-container" class="h-48 overflow-y-auto font-mono text-xs text-slate-600 dark:text-slate-400 space-y-0.5 p-2 rounded bg-slate-50 dark:bg-slate-950">
+            <div class="empty-log-msg text-xs text-slate-400 dark:text-slate-500 italic p-2">Niciun eveniment recepționat în jurnal. Rulați o etapă din pipeline pentru a genera fluxuri de sistem.</div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ============================================================== -->
+      <!-- VIEW 3: BRIEFINGS READER (#/briefings)                         -->
+      <!-- ============================================================== -->
+      <section id="view-briefings" class="view-section hidden max-w-7xl mx-auto min-h-[calc(100vh-6.5rem)] flex-1 flex flex-col">
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-6 flex-1 min-h-[600px]">
+          
+          <!-- Master List (4 cols) -->
+          <div class="md:col-span-4 flex flex-col h-full border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900 p-3 shadow-sm overflow-hidden">
+            <div class="pb-3 border-b border-slate-200 dark:border-slate-800">
+              <h3 class="text-xs font-semibold text-slate-900 dark:text-slate-100 uppercase tracking-wider">Arhivă Sinteze</h3>
+            </div>
+            <div id="briefings-list" class="flex-1 overflow-y-auto pt-3 space-y-2">
+              <div class="skeleton h-12 w-full"></div>
+              <div class="skeleton h-12 w-full"></div>
+              <div class="skeleton h-12 w-full"></div>
+            </div>
+          </div>
+
+          <!-- Document Reader (8 cols) -->
+          <div class="md:col-span-8 flex flex-col h-full border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900 shadow-sm overflow-hidden briefing-reader-container">
+            
+            <!-- Toolbar -->
+            <div class="no-print p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4">
+              <div>
+                <h3 id="briefing-header-filename" class="text-sm font-bold text-slate-900 dark:text-slate-100">Selectați o sinteză</h3>
+                <span id="briefing-header-date" class="text-xs text-slate-500"></span>
+              </div>
+              <div class="flex items-center gap-2">
+                <button onclick="window.print()" class="px-2.5 py-1.5 text-xs font-medium rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition flex items-center gap-1.5">
+                  <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+                  <span>Tipărește</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Content Area -->
+            <div id="briefing-markdown-content" class="flex-1 p-8 overflow-y-auto prose-report max-w-none">
+              <div class="text-sm text-slate-400 text-center py-12">Selectați o sinteză din stânga pentru a o citi.</div>
+            </div>
+
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ============================================================== -->
+      <!-- VIEW 4: DATABASE BROWSER (#/database)                          -->
+      <!-- ============================================================== -->
+      <section id="view-database" class="view-section hidden max-w-7xl mx-auto space-y-4 min-h-[calc(100vh-6.5rem)] flex-1 flex flex-col">
+        
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-6 flex-1">
+          
+          <!-- Tables List (3 cols) -->
+          <div class="md:col-span-3 border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900 p-3 shadow-sm space-y-2">
+            <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider px-2 py-1">Tabele SQLite</div>
+            <div id="db-tables-list" class="space-y-1.5">
+              <div class="skeleton h-8 w-full"></div>
+              <div class="skeleton h-8 w-full"></div>
+              <div class="skeleton h-8 w-full"></div>
+            </div>
+          </div>
+
+          <!-- Table Grid Container (9 cols) -->
+          <div class="md:col-span-9 border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900 shadow-sm flex flex-col overflow-hidden">
+            
+            <!-- Grid Header & Filters -->
+            <div class="p-3 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+              <div class="flex items-center gap-2">
+                <h3 id="db-active-table-name" class="font-mono text-sm font-semibold text-slate-900 dark:text-slate-100">raw_articles</h3>
+              </div>
+
+              <!-- Actions & Filter Search -->
+              <div class="flex items-center gap-2">
+                <button id="btn-view-schema" class="px-2.5 py-1 text-xs font-medium rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition flex items-center gap-1">
+                  <i data-lucide="table" class="w-3.5 h-3.5"></i>
+                  <span>Schemă</span>
+                </button>
+                <button id="btn-export-csv" class="px-2.5 py-1 text-xs font-medium rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition flex items-center gap-1">
+                  <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                  <span>Export CSV</span>
+                </button>
+                <button id="btn-db-purge" onclick="App.confirmPurgeSystem()" class="px-2.5 py-1 text-xs font-medium rounded border border-rose-300 dark:border-rose-800 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition flex items-center gap-1 cursor-pointer" title="Purjează ambele baze de date și toate rapoartele">
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                  <span>Purjare Date</span>
+                </button>
+                <input type="text" id="db-search-input" placeholder="Caută în tabel..." onchange="App.dbState.searchQuery=this.value; App.loadDbRows();" class="text-xs rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 py-1 text-slate-900 dark:text-slate-100 font-sans focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                <button onclick="App.dbState.searchQuery=''; document.getElementById('db-search-input').value=''; App.loadDbRows();" class="px-2 py-1 text-xs text-slate-500 hover:text-slate-700">Resetează</button>
+              </div>
+            </div>
+
+            <!-- Table Rows Container -->
+            <div id="db-grid-container" class="flex-1 min-h-[360px] p-4 space-y-2 overflow-x-auto">
+              <div class="skeleton h-8 w-full"></div>
+              <div class="skeleton h-8 w-full"></div>
+              <div class="skeleton h-8 w-full"></div>
+            </div>
+
+            <!-- Pagination Bar -->
+            <div class="p-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500">
+              <span id="db-page-indicator">Pagina 1</span>
+              <div class="flex items-center gap-2">
+                <button id="db-btn-prev" class="px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 disabled:opacity-40">Înapoi</button>
+                <button id="db-btn-next" class="px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 disabled:opacity-40">Înainte</button>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+      <!-- ============================================================== -->
+      <!-- VIEW 5: INSIGHTS (#/insights)                                  -->
+      <!-- ============================================================== -->
+      <section id="view-insights" class="view-section hidden max-w-7xl mx-auto space-y-6 min-h-[calc(100vh-6.5rem)] flex-1 flex flex-col">
+        
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          
+          <!-- Threat Vectors Column -->
+          <div class="space-y-3">
+            <div>
+              <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Vectori de Amenințare Politică (Red Team)</h3>
+              <p class="text-xs text-slate-500">Vulnerabilități instituționale și riscuri de comunicare identificate.</p>
+            </div>
+            <div id="insights-threats-container" class="space-y-3">
+              <div class="skeleton h-24 w-full"></div>
+              <div class="skeleton h-24 w-full"></div>
+            </div>
+          </div>
+
+          <!-- Contradictions Column -->
+          <div class="space-y-3">
+            <div>
+              <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Contradicții & Schimbări de Poziție (Arhivist)</h3>
+              <p class="text-xs text-slate-500">Discrepanțe verificate între declarații istorice și actuale.</p>
+            </div>
+            <div id="insights-anomalies-container" class="space-y-3">
+              <div class="skeleton h-24 w-full"></div>
+            </div>
+          </div>
+
+        </div>
+
+      </section>
+
+      <!-- ============================================================== -->
+      <!-- VIEW 6: RUNS AUDIT LOG (#/runs)                                -->
+      <!-- ============================================================== -->
+      <section id="view-runs" class="view-section hidden max-w-7xl mx-auto space-y-4 min-h-[calc(100vh-6.5rem)] flex-1 flex flex-col">
+        <div>
+          <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Istoric Rulări Pipeline</h3>
+          <p class="text-xs text-slate-500">Audit al tuturor etapelor rulate și al stării lor de finalizare.</p>
+        </div>
+
+        <div class="border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
+          <div id="runs-table-container"></div>
+        </div>
+      </section>
+
+      <!-- ============================================================== -->
+      <!-- VIEW: CONNECTED PAPERS RELATIONAL GRAPH (#/graph)              -->
+      <!-- ============================================================== -->
+      <section id="view-graph" class="view-section hidden max-w-7xl mx-auto space-y-4 min-h-[calc(100vh-6.5rem)] flex-1 flex flex-col">
+        
+        <!-- Header & Action Controls Bar -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">Hartă Relațională & Similaritate Semantică</h3>
+              <span id="graph-mode-badge" class="px-2 py-0.5 text-[10px] font-semibold rounded bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">Embeddings</span>
+            </div>
+            <p class="text-xs text-slate-500">Vizualizare stil Connected Papers a narațiunilor, relațiilor de putere și a vectorilor de amenințare.</p>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-3">
+            <!-- Mode Switcher -->
+            <div class="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-md border border-slate-200 dark:border-slate-700 text-xs">
+              <button id="graph-btn-mode-similarity" class="px-2.5 py-1 rounded font-medium transition bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs">Similaritate (Embeddings)</button>
+              <button id="graph-btn-mode-actors" class="px-2.5 py-1 rounded font-medium transition text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200">Actori & Putere</button>
+              <button id="graph-btn-mode-articles" class="px-2.5 py-1 rounded font-medium transition text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200">Articole & Surse</button>
+            </div>
+
+            <!-- Similarity Slider -->
+            <div id="graph-sim-slider-container" class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+              <span class="text-[11px] font-medium">Prag:</span>
+              <input type="range" id="graph-sim-threshold" min="0.40" max="0.95" step="0.05" value="0.60" class="w-20 accent-blue-600 cursor-pointer" />
+              <span id="graph-sim-threshold-val" class="font-mono text-[11px] font-semibold text-blue-600 dark:text-blue-400 w-8">60%</span>
+            </div>
+
+            <!-- Search input -->
+            <div class="relative">
+              <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-2 text-slate-400"></i>
+              <input type="text" id="graph-search-input" placeholder="Filtrează noduri..." class="pl-8 pr-3 py-1 text-xs rounded border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 w-36 focus:w-48 transition-all focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            </div>
+
+            <!-- Fit zoom -->
+            <button id="graph-btn-reset-zoom" title="Resetează Zoom" class="p-1.5 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition">
+              <i data-lucide="maximize" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Canvas and Details Container -->
+        <div class="relative flex-1 min-h-[580px] border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-[#070b13] overflow-hidden shadow-sm flex flex-col">
+          
+          <!-- Graph SVG Container -->
+          <div id="graph-canvas-container" class="relative w-full flex-1 min-h-[560px] cursor-grab active:cursor-grabbing overflow-hidden">
+            <svg id="graph-svg" class="w-full h-full block select-none"></svg>
+            
+            <!-- Graph Empty / Loading State -->
+            <div id="graph-loading-overlay" class="hidden absolute inset-0 flex items-center justify-center bg-white/70 dark:bg-slate-950/70 backdrop-blur-xs z-10">
+              <div class="flex items-center gap-2.5 text-xs text-slate-600 dark:text-slate-400">
+                <i data-lucide="loader-2" class="w-4 h-4 animate-spin text-blue-600"></i>
+                <span>Se calculează matricea de similaritate semantică...</span>
+              </div>
+            </div>
+
+            <!-- Floating Legend -->
+            <div class="absolute bottom-4 left-4 p-3 rounded-lg border border-slate-200/80 dark:border-slate-800/80 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm shadow-sm text-[11px] space-y-1.5 z-10 pointer-events-none select-none">
+              <div class="font-semibold text-slate-700 dark:text-slate-300 text-[10px] uppercase tracking-wider">Legendă Graf</div>
+              <div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                <span class="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block"></span>
+                <span>Nod recent / eveniment politic</span>
+              </div>
+              <div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                <span class="w-2.5 h-2.5 rounded-full bg-indigo-400 inline-block"></span>
+                <span>Nod istoric / context</span>
+              </div>
+              <div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                <span class="w-2.5 h-0.5 bg-amber-500 inline-block"></span>
+                <span>Vector amenințare Red Team</span>
+              </div>
+              <div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                <span class="w-2.5 h-0.5 bg-slate-300 dark:bg-slate-700 inline-block"></span>
+                <span>Similaritate semantică (cosinus)</span>
+              </div>
+            </div>
+
+            <!-- Stats Badge -->
+            <div class="absolute top-4 left-4 flex items-center gap-2 z-10 pointer-events-none">
+              <span id="graph-stats-nodes" class="px-2 py-0.5 rounded text-[11px] font-mono font-medium bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300">0 noduri</span>
+              <span id="graph-stats-edges" class="px-2 py-0.5 rounded text-[11px] font-mono font-medium bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300">0 conexiuni</span>
+            </div>
+
+          </div>
+
+          <!-- Inspector Slide-Over Drawer (Right) -->
+          <div id="graph-inspector-drawer" class="absolute top-0 right-0 bottom-0 w-84 md:w-96 border-l border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md shadow-xl transform translate-x-full transition-transform duration-200 ease-in-out z-20 flex flex-col">
+            <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span id="graph-inspector-kind" class="px-2 py-0.5 text-[10px] font-semibold uppercase rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">Eveniment</span>
+                <span id="graph-inspector-date" class="text-xs text-slate-500 font-mono"></span>
+              </div>
+              <button id="btn-close-graph-inspector" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                <i data-lucide="x" class="w-4 h-4"></i>
+              </button>
+            </div>
+            
+            <div id="graph-inspector-body" class="flex-1 p-4 overflow-y-auto space-y-4">
+              <!-- Content filled dynamically -->
+            </div>
+          </div>
+
+        </div>
+
+      </section>
+
+    </main>
+
+  </div>
+
+  <!-- ==================== ROW DETAIL SLIDE-OVER DRAWER ==================== -->
+  <div id="row-detail-drawer" class="no-print fixed inset-y-0 right-0 w-96 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-xl transform translate-x-full transition-transform duration-200 ease-in-out z-50 flex flex-col">
+    <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+      <h3 class="text-xs font-semibold text-slate-900 dark:text-slate-100 uppercase tracking-wider">Detalii Înregistrare</h3>
+      <button id="btn-close-drawer" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+    <div id="row-detail-content" class="flex-1 p-4 overflow-y-auto"></div>
+  </div>
+
+  <!-- ==================== SYSTEM PURGE MODAL ==================== -->
+  <div id="purge-modal" class="hidden no-print fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-2xl max-w-md w-full p-6 space-y-4">
+      <div class="flex items-start gap-3">
+        <div class="w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-950/60 flex items-center justify-center text-rose-600 dark:text-rose-400 flex-none">
+          <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            Purjare Baze de Date & Rapoarte
+          </h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            Această acțiune este ireversibilă și va șterge complet:
+          </p>
+          <ul class="text-xs text-slate-600 dark:text-slate-400 mt-2 list-disc list-inside space-y-1 font-mono">
+            <li>SQLite: raw_articles, events, anomalies, threats, runs</li>
+            <li>ChromaDB: nomic-embed-text vector collection</li>
+            <li>Rapoarte: toate fișierele din reports/</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+        <button id="btn-cancel-purge" onclick="App.closePurgeModal()" class="px-3 py-1.5 rounded-md text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer">
+          Anulează
+        </button>
+        <button id="btn-confirm-purge" onclick="App.executePurgeSystem()" class="px-3 py-1.5 rounded-md text-xs font-medium bg-rose-600 hover:bg-rose-700 text-white transition flex items-center gap-1.5 cursor-pointer">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          <span id="btn-confirm-purge-text">Confirmă Purjarea</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TOAST NOTIFICATION CONTAINER ==================== -->
+  <div id="toast-container" class="no-print fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- ==================== SCHEMA VIEW MODAL ==================== -->
+  <div id="schema-modal" class="hidden no-print fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl max-w-lg w-full p-5 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+        <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+          <span>Schemă Tabel:</span>
+          <span id="schema-modal-table-name" class="font-mono text-blue-600 dark:text-blue-400"></span>
+        </h3>
+        <button id="btn-close-schema" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <div id="schema-modal-content" class="max-h-80 overflow-y-auto"></div>
+    </div>
+  </div>
+
+  <!-- Local Modular Scripts -->
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/app.js"></script>
+
+</body>
+</html>

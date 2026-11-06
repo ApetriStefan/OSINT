@@ -1,0 +1,97 @@
+# =====================================================================
+# BMad Method & Kipi Agent (Git Version Control Exclusions)
+# =====================================================================
+
+# BMad system directories & generated execution outputs
+_bmad/
+_bmad-output/
+.agent/
+.agents/
+.claude/
+.github/agents/
+
+# Kipi private knowledge & unclassified raw user inputs
+# Keeps folder structure intact via .gitkeep while ignoring all content
+knowledge/private_knowledge/**
+!knowledge/private_knowledge/
+!knowledge/private_knowledge/**/
+!knowledge/private_knowledge/**/.gitkeep
+user-data/
+ready-for-classify/
+_archive/
+
+# =====================================================================
+# Secrets, Credentials, and Environment Variables
+# =====================================================================
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.crt
+*.pfx
+*.p12
+credentials.json
+client_secrets.json
+*token*
+*secret*
+*password*
+
+# =====================================================================
+# Language Runtimes, Virtual Environments & Cache Directories
+# =====================================================================
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+ENV/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# =====================================================================
+# Operating System & IDE Artifacts
+# =====================================================================
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# =====================================================================
+# Databases and Vector Stores
+# =====================================================================
+chroma_db/
+
+# =====================================================================
+# Temporary, Log & Scratch Files
+# =====================================================================
+scratch/
+tmp/
+temp/
+*.tmp
+*.temp
+*.log
+*.bak
+*.swp
+*.swo

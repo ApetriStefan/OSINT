@@ -1,0 +1,276 @@
+/* ==========================================================================
+   RO-INTEL OSINT Platform - Professional Neutral UI Stylesheet
+   Design Inspiration: Linear, Stripe Dashboard, Vercel, Notion
+   ========================================================================== */
+
+/* Base reset & layout fill */
+html, body {
+  height: 100vh;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Crisp browser calendar picker icon across light and dark modes */
+input[type="date"] {
+  color-scheme: light;
+}
+.dark input[type="date"] {
+  color-scheme: dark;
+}
+
+aside {
+  height: 100vh !important;
+  min-height: 100vh !important;
+}
+
+:root {
+  /* Light Theme (Default) */
+  --bg-app: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-subtle: #f1f5f9;
+  --bg-sidebar: #f8fafc;
+  --border-subtle: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --accent-primary: #2563eb;
+  --accent-subtle: #eff6ff;
+  --accent-hover: #1d4ed8;
+  
+  /* Status Semantics */
+  --status-success-bg: #ecfdf5;
+  --status-success-border: #a7f3d0;
+  --status-success-text: #065f46;
+  --status-success-dot: #10b981;
+
+  --status-warn-bg: #fffbeb;
+  --status-warn-border: #fde68a;
+  --status-warn-text: #92400e;
+  --status-warn-dot: #f59e0b;
+
+  --status-error-bg: #fef2f2;
+  --status-error-border: #fecaca;
+  --status-error-text: #991b1b;
+  --status-error-dot: #ef4444;
+
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05);
+  --shadow-dropdown: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.07);
+}
+
+.dark {
+  /* Dark Theme */
+  --bg-app: #0b0f19;
+  --bg-surface: #111827;
+  --bg-subtle: #1e293b;
+  --bg-sidebar: #0f172a;
+  --border-subtle: #1f2937;
+  --border-strong: #374151;
+  --text-primary: #f9fafb;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
+  --accent-primary: #3b82f6;
+  --accent-subtle: #1e293b;
+  --accent-hover: #60a5fa;
+
+  --status-success-bg: rgba(16, 185, 129, 0.1);
+  --status-success-border: rgba(16, 185, 129, 0.25);
+  --status-success-text: #34d399;
+  --status-success-dot: #10b981;
+
+  --status-warn-bg: rgba(245, 158, 11, 0.1);
+  --status-warn-border: rgba(245, 158, 11, 0.25);
+  --status-warn-text: #fbbf24;
+  --status-warn-dot: #f59e0b;
+
+  --status-error-bg: rgba(239, 68, 68, 0.1);
+  --status-error-border: rgba(239, 68, 68, 0.25);
+  --status-error-text: #f87171;
+  --status-error-dot: #ef4444;
+
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.3), 0 1px 2px -1px rgb(0 0 0 / 0.3);
+  --shadow-dropdown: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Shimmer Loading Skeleton */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-subtle) 25%, var(--border-subtle) 50%, var(--bg-subtle) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+
+/* Typographic prose for Briefings */
+.prose-report {
+  color: var(--text-primary);
+  font-size: 0.9375rem;
+  line-height: 1.7;
+}
+
+.prose-report h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-top: 0.5rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+}
+
+.prose-report h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-top: 1.75rem;
+  margin-bottom: 0.75rem;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.prose-report h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+}
+
+.prose-report p {
+  margin-bottom: 1rem;
+  color: var(--text-secondary);
+}
+
+.prose-report ul {
+  list-style-type: disc;
+  padding-left: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.prose-report li {
+  margin-bottom: 0.5rem;
+  color: var(--text-secondary);
+}
+
+.prose-report strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.prose-report em {
+  font-style: italic;
+  color: var(--text-primary);
+}
+
+.prose-report blockquote {
+  border-left: 3px solid var(--accent-primary);
+  padding: 0.5rem 1rem;
+  margin: 1rem 0;
+  background: var(--bg-subtle);
+  border-radius: 0 4px 4px 0;
+  color: var(--text-secondary);
+}
+
+/* Print Stylesheet for Briefings */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+  #view-briefings, .briefing-reader-container {
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+  .prose-report h1, .prose-report h2, .prose-report h3, .prose-report p, .prose-report li {
+    color: #000000 !important;
+  }
+}
+
+/* ==========================================================================
+   Connected Papers Graph Visualization Styles
+   ========================================================================== */
+
+#graph-canvas-container {
+  background-color: var(--bg-surface);
+  background-image: radial-gradient(var(--border-subtle) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.graph-node {
+  cursor: pointer;
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.graph-node:hover {
+  filter: drop-shadow(0 0 6px rgba(37, 99, 235, 0.5));
+}
+
+.graph-node.dimmed {
+  opacity: 0.12 !important;
+}
+
+.graph-link {
+  transition: stroke-opacity 0.2s ease, stroke-width 0.2s ease;
+}
+
+.graph-link.dimmed {
+  stroke-opacity: 0.05 !important;
+}
+
+.graph-link.highlighted {
+  stroke: var(--accent-primary) !important;
+  stroke-opacity: 0.9 !important;
+  stroke-width: 2.5px !important;
+}
+
+.graph-tooltip {
+  position: absolute;
+  pointer-events: none;
+  z-index: 40;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-dropdown);
+  max-width: 240px;
+  line-height: 1.4;
+}
