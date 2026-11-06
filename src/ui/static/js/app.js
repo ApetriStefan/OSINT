@@ -26,7 +26,7 @@ const App = {
   // Realtime Agents Store for Live View
   agentsState: {
     selector: { name: 'Selector Dosar Presă', status: 'idle', thinking: '', output: '', duration: null },
-    extractor: { name: 'Agent 1: Extractor Entit??i', status: 'idle', thinking: '', output: '', duration: null },
+    extractor: { name: 'Agent 1: Extractor Entități', status: 'idle', thinking: '', output: '', duration: null },
     archivist: { name: 'Agent 2: Arhivist & Anomalii', status: 'idle', thinking: '', output: '', duration: null },
     red_team: { name: 'Agent 3: Red Team Strategist', status: 'idle', thinking: '', output: '', duration: null },
     director: { name: 'Agent 4: Director Sinteză', status: 'idle', thinking: '', output: '', duration: null },
@@ -719,7 +719,7 @@ const App = {
 
     const s = (status || '').toLowerCase().trim();
     if (s === 'running' || s === 'started') {
-      badge.textContent = '?n desf??urare';
+      badge.textContent = 'În desfășurare';
       badge.className = 'step-status-badge px-2 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300';
     } else if (s === 'completed' || s === 'success' || s === 'done') {
       badge.textContent = 'Finalizat';
@@ -1470,6 +1470,31 @@ const App = {
       .attr('viewBox', `0 0 ${width} ${height}`);
 
     svg.selectAll('*').remove();
+
+    const emptyOverlay = document.getElementById('graph-empty-overlay');
+    if (!data || !data.nodes || data.nodes.length === 0) {
+      if (emptyOverlay) {
+        emptyOverlay.classList.remove('hidden');
+        const emptyMsg = document.getElementById('graph-empty-message');
+        if (emptyMsg) {
+          if (this.graphState.mode === 'actors') {
+            emptyMsg.textContent = 'Nu s-au găsit actori sau relații extrase în baza de date. Rulați etapa de extracție din Panoul de Control.';
+          } else if (this.graphState.mode === 'articles') {
+            emptyMsg.textContent = 'Nu există articole brute stocate pentru generarea fluxului de știri. Lansați etapa Ingest.';
+          } else {
+            emptyMsg.textContent = 'Nu există vectori de similaritate semantică stocați în ChromaDB. Rulați pipeline-ul complet.';
+          }
+        }
+        if (window.lucide) lucide.createIcons();
+      }
+      const nodesBadge = document.getElementById('graph-stats-nodes');
+      const edgesBadge = document.getElementById('graph-stats-edges');
+      if (nodesBadge) nodesBadge.textContent = '0 noduri';
+      if (edgesBadge) edgesBadge.textContent = '0 conexiuni';
+      return;
+    } else {
+      if (emptyOverlay) emptyOverlay.classList.add('hidden');
+    }
 
     // Defs for arrowhead markers
     const defs = svg.append('defs');

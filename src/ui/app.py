@@ -464,8 +464,62 @@ async def get_db_graph(
                     "nodes": nodes,
                     "edges": edges
                 }
+            elif len(emb_ids) == 1:
+                meta = metadatas[0] if len(metadatas) > 0 else {}
+                actor = meta.get("actor") or "Unknown"
+                action = meta.get("action") or ""
+                return {
+                    "mode": "similarity",
+                    "meta": {
+                        "node_count": 1,
+                        "edge_count": 0,
+                        "embedding_model": "nomic-embed-text",
+                        "min_similarity": min_similarity,
+                        "fallback_used": False
+                    },
+                    "nodes": [{
+                        "id": str(emb_ids[0]),
+                        "label": f"{actor}: {action[:38]}..." if len(action) > 38 else f"{actor}: {action}",
+                        "actor": actor,
+                        "topic": meta.get("topic") or "General",
+                        "action": action,
+                        "quote": meta.get("verbatim_evidence") or "",
+                        "date": get_bucharest_today_str(),
+                        "source": meta.get("source") or "Feed Monitor",
+                        "threat_count": 0,
+                        "contradiction_score": 0.0,
+                        "kind": "event",
+                        "weight": 1
+                    }],
+                    "edges": []
+                }
+            return {
+                "mode": "similarity",
+                "meta": {
+                    "node_count": 0,
+                    "edge_count": 0,
+                    "embedding_model": "nomic-embed-text",
+                    "min_similarity": min_similarity,
+                    "fallback_used": True
+                },
+                "nodes": [],
+                "edges": []
+            }
         except Exception as e:
             logger.warning("Error computing semantic similarity graph: %s", e)
+            return {
+                "mode": "similarity",
+                "meta": {
+                    "node_count": 0,
+                    "edge_count": 0,
+                    "embedding_model": "nomic-embed-text",
+                    "min_similarity": min_similarity,
+                    "error": str(e),
+                    "fallback_used": True
+                },
+                "nodes": [],
+                "edges": []
+            }
 
     # 2. Actors & Power Vectors Mode
     if mode == "actors":
@@ -529,15 +583,40 @@ async def get_db_graph(
             if vuln and expl:
                 vuln_id = f"actor:{vuln}"
                 expl_id = f"actor:{expl}"
-                if vuln_id in node_id_set and expl_id in node_id_set:
-                    edges.append({
-                        "source": expl_id,
-                        "target": vuln_id,
-                        "kind": "threat",
-                        "weight": 2.0,
-                        "label": thr.get("threat_type") or "Vulnerabilitate tactică",
-                        "description": thr.get("description") or ""
+
+                # Ensure threat actors exist as nodes even if not in extracted_events
+                if vuln_id not in node_id_set:
+                    nodes.append({
+                        "id": vuln_id,
+                        "label": vuln,
+                        "actor": vuln,
+                        "kind": "actor",
+                        "threat_count": threat_actor_map.get(vuln.lower(), 1),
+                        "contradiction_score": anomaly_actor_map.get(vuln.lower(), 0.0),
+                        "weight": 2
                     })
+                    node_id_set.add(vuln_id)
+
+                if expl_id not in node_id_set:
+                    nodes.append({
+                        "id": expl_id,
+                        "label": expl,
+                        "actor": expl,
+                        "kind": "actor",
+                        "threat_count": threat_actor_map.get(expl.lower(), 0),
+                        "contradiction_score": anomaly_actor_map.get(expl.lower(), 0.0),
+                        "weight": 2
+                    })
+                    node_id_set.add(expl_id)
+
+                edges.append({
+                    "source": expl_id,
+                    "target": vuln_id,
+                    "kind": "threat",
+                    "weight": 2.0,
+                    "label": thr.get("threat_type") or "Vulnerabilitate tactică",
+                    "description": thr.get("description") or ""
+                })
 
         return {
             "mode": "actors",

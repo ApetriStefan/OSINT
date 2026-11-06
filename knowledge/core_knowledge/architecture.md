@@ -2,7 +2,7 @@
 
 > **Status:** 🟩 Production Ready (Modernized Multi-Agent & SSE Streaming Architecture)  
 > **Last Updated:** 2026-11-06  
-> **Automated Verification:** 77/77 tests passing (100% pass rate)  
+> **Automated Verification:** 80/80 tests passing (100% pass rate)  
 
 ---
 
@@ -195,7 +195,7 @@ The `EventBus` implements a publisher-subscriber broker bridging synchronous age
 ## 7. Verification & Automated Quality Gates
 
 The technical architecture is backed by an automated testing suite:
-- **Total Automated Tests:** **77 tests passing** (`tests/unit/` and `tests/integration/`).
+- **Total Automated Tests:** **80 tests passing** (`tests/unit/` and `tests/integration/`).
 - **Pass Rate:** **100%**.
 - **Execution Speed:** **~3.05 seconds** across the entire suite via `uv run pytest`.
 - **Coverage Areas:** Multi-format date parsing, Romanian date regression, taxonomy scoring, noise elimination, entity resolution, event bus ring buffer, cooperative cancellation, LLM token cleaning, 131k context window preservation, SQLite WAL mode, deduplication, DB viewer APIs, CSV export, system purge, and ChromaDB vector operations.
@@ -213,7 +213,7 @@ The technical architecture is backed by an automated testing suite:
 - [`src/storage/`](file:///d:/OSINT/src/storage/) — SQLite WAL manager and ChromaDB vector store
 - [`src/orchestrator/`](file:///d:/OSINT/src/orchestrator/) — MasterPipeline execution engine and state machine
 - [`src/ui/`](file:///d:/OSINT/src/ui/) — FastAPI web application, SSE broker, and dark-mode dashboard
-- [`tests/`](file:///d:/OSINT/tests/) — 77-test automated unit and integration suite
+- [`tests/`](file:///d:/OSINT/tests/) — 80-test automated unit and integration suite
 
 ---
 

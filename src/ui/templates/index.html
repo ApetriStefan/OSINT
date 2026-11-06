@@ -731,6 +731,20 @@
               </div>
             </div>
 
+            <!-- Graph Empty State Overlay -->
+            <div id="graph-empty-overlay" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-white/95 dark:bg-[#070b13]/95 z-10 p-6 text-center">
+              <div class="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800/80 flex items-center justify-center text-slate-400 mb-3.5 border border-slate-200 dark:border-slate-700/60 shadow-xs">
+                <i data-lucide="network" class="w-7 h-7 text-blue-600 dark:text-blue-400"></i>
+              </div>
+              <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">Niciun nod disponibil în acest mod</h3>
+              <p id="graph-empty-message" class="text-xs text-slate-500 dark:text-slate-400 max-w-sm mb-4 leading-relaxed">
+                Nu s-au găsit evenimente sau conexiuni pentru vizualizarea selectată. Lansați colectarea și analiza din Panoul de Control pentru a popula graful.
+              </p>
+              <button onclick="App.navigateTo('overview')" class="px-3.5 py-1.5 text-xs font-medium rounded-md bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-xs">
+                Mergi la Panou de Control
+              </button>
+            </div>
+
             <!-- Floating Legend -->
             <div class="absolute bottom-4 left-4 p-3 rounded-lg border border-slate-200/80 dark:border-slate-800/80 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm shadow-sm text-[11px] space-y-1.5 z-10 pointer-events-none select-none">
               <div class="font-semibold text-slate-700 dark:text-slate-300 text-[10px] uppercase tracking-wider">Legendă Graf</div>

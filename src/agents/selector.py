@@ -63,7 +63,11 @@ class NewsSelector:
         date_str = validate_target_date(target_date)
         articles = self.db_manager.get_raw_articles_for_date(date_str)
         if not articles:
-            # Fallback to recent articles if today's date has 0
+            # If user explicitly requested a target date, do NOT silently pull recent articles
+            if target_date is not None:
+                logger.warning("No raw articles found in SQLite for explicitly requested date: %s", date_str)
+                return []
+            # Fallback to recent articles only if running in auto mode without explicit date
             articles = self.db_manager.get_recent_articles(days=2)
 
         candidates = []
@@ -155,7 +159,11 @@ class NewsSelector:
         try:
             candidates = self.prepare_candidates(target_date)
             if not candidates:
-                raise RuntimeError("No raw articles found to process for dossier.")
+                date_label = target_date or get_bucharest_today_str()
+                raise RuntimeError(
+                    f"Nu s-au găsit articole în baza de date pentru data {date_label}. "
+                    "Rulați etapa Ingest pentru a colecta fluxurile curente sau selectați o dată care conține articole salvate."
+                )
 
             logger.info("Selecting top %d strategic articles...", get_settings().max_selected_articles)
             selected_meta = self.select_top_articles(

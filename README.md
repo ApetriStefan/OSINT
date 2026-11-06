@@ -3,7 +3,7 @@
 [![Python Version](https://img.shields.io/badge/Python-3.10%2B-blue.svg?logo=python&logoColor=white)](https://python.org)
 [![uv Runner](https://img.shields.io/badge/Package%20Manager-uv-purple.svg?logo=astral&logoColor=white)](https://astral.sh/uv)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![Pytest Suite](https://img.shields.io/badge/Pytest-77%20Passed%20(100%25)-success.svg?logo=pytest&logoColor=white)](#automated-testing--quality-gates)
+[![Pytest Suite](https://img.shields.io/badge/Pytest-80%20Passed%20(100%25)-success.svg?logo=pytest&logoColor=white)](#automated-testing--quality-gates)
 [![Ollama](https://img.shields.io/badge/Local%20LLM-Ollama-black.svg?logo=ollama&logoColor=white)](https://ollama.com)
 [![Context Window](https://img.shields.io/badge/Context%20Window-131%2C072%20Tokens-red.svg)](#key-architectural-invariants)
 [![Database](https://img.shields.io/badge/SQLite-WAL%20Mode-003B57.svg?logo=sqlite&logoColor=white)](#storage--memory-architecture)

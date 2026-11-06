@@ -12,13 +12,14 @@ from src.utils_date import get_bucharest_today_str
 logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT_AGENT_5 = (
-    "You are an elite proofreader and copyeditor specialized in the Romanian language. "
-    "Your sole task is to identify and correct any spelling, diacritics, grammar, syntax, or punctuation mistakes in the provided Romanian text.\n\n"
-    "CRITICAL RULES:\n"
-    "1. Do not alter, add, or remove any information, predictions, or intelligence analysis.\n"
-    "2. Preserve the exact Markdown structure (#, ##, *, bold text, etc.) of the original document.\n"
-    "3. Correct common scraped/scanned typos (e.g., 'ășirii' to 'țării', 'ěmi' to 'îmi', 'aparbine' to 'aparține', 'tehnocratele' to 'tehnocrate ale') and ensure natural Romanian flow.\n"
-    "4. Return ONLY the finalized, corrected Romanian Markdown text. No conversational intros or outros."
+    "Ești un redactor și corector de elită, specializat în limba română și analiza de intelligence politic. "
+    "Sarcina ta exclusivă este să corectezi ortografia, diacriticele, gramatica, sintaxa și puritatea lingvistică a textului furnizat.\n\n"
+    "REGULI CRITICE:\n"
+    "1. Nu altera, adăuga sau elimina fapte, predicții sau substanța analizei de informații.\n"
+    "2. Păstrează cu strictețe structura Markdown (#, ##, *, text îngroșat etc.) a documentului original.\n"
+    "3. Corectează erorile tipice de scanare/OCR (ex: 'ășirii' -> 'țării', 'ěmi' -> 'îmi', 'aparbine' -> 'aparține') și asigură un flux narativ natural în limba română cu diacritice complete (ă, â, î, ș, ț).\n"
+    "4. PURITATE LINGVISTICĂ: Dacă textul conține titluri de secțiuni, etichete îngroșate la început de paragraf (bullet headers) sau concepte rămase în limba engleză (ex: 'Confidence Score', 'Strategic Silence', 'Weaponized Framing', 'Institutional Pressure', 'Weaponizing Incompetence', 'Systemic Crisis Narrative', 'Security Normalization', 'Black Swan'), tradu-le și armonizează-le OBLIGATORIU în limba română elegantă și profesională (ex: 'Scor de Încredere', 'Tăcere Strategică', 'Încadrare Parazitară', 'Presiune Instituțională', 'Exploatarea Incompetenței Structurale', 'Narativul Crizei Sistemice', 'Normalizarea Riscurilor de Securitate', 'Eveniment Imprevizibil').\n"
+    "5. Returnează DOAR textul final corectat în format Markdown românesc. Fără introduceri sau concluzii conversaționale."
 )
 
 
@@ -71,6 +72,27 @@ class CopyeditorAgent:
             "",
             corrected
         )
+
+        # Linguistic harmonization: replace any residual leaked English labels or headings
+        english_to_romanian_map = [
+            (r"\bConfidence Score\b", "Scor de Încredere"),
+            (r"\bStrategic Silence & Weaponized Framing\b", "Tăcere Strategică și Încadrare Parazitară"),
+            (r"\bStrategic Silence\b", "Tăcere Strategică"),
+            (r"\bWeaponized Framing\b", "Încadrare Parazitară"),
+            (r"\bConvergent Strategic Interests\b", "Interese Strategice Convergente"),
+            (r"\bInstitutional Pressure\b", "Presiune Instituțională"),
+            (r"\bWeaponizing Incompetence\b", "Exploatarea Incompetenței Structurale"),
+            (r"\bSystemic Crisis Narrative\b", "Narativul Crizei Sistemice"),
+            (r"\bSecurity Normalization\b", "Normalizarea Riscurilor de Securitate"),
+            (r"\bBlack Swan Tracking\b", "Monitorizare Evenimente Imprevizibile"),
+            (r"\bBlack Swan\b", "Eveniment Imprevizibil"),
+            (r"\bElectoral Legitimacy Attack\b", "Atac la Legitimitatea Electorală"),
+            (r"\bElectoral Vulnerability\b", "Vulnerabilitate Electorală"),
+            (r"\bSystemic Competence Crisis\b", "Criză de Competență Sistemică"),
+            (r"\bPolitical Instability\b", "Instabilitate Politică"),
+        ]
+        for pattern, repl in english_to_romanian_map:
+            corrected = re.sub(pattern, repl, corrected, flags=re.IGNORECASE)
 
         date_suffix = target_date or get_bucharest_today_str()
         rep_dir = Path(reports_dir)

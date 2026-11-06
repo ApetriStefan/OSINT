@@ -1,6 +1,6 @@
 # Automated Testing Strategy
 
-> **Summary:** Technical specification of the automated pytest test suite: 77 comprehensive unit and integration tests, fast regression gates, and data integrity guarantees.
+> **Summary:** Technical specification of the automated pytest test suite: 80 comprehensive unit and integration tests, fast regression gates, and data integrity guarantees.
 
 **Status:** 🟩 Stable  
 **Owner role:** QA & Test Automation Engineer (link to [ownership-map.md](../team_and_stakeholders/ownership-map.md))  
@@ -12,7 +12,7 @@
 
 - [Overview](#overview)
 - [Test Suite Architecture](#test-suite-architecture)
-- [Unit Testing Suite (42 Tests)](#unit-testing-suite-42-tests)
+- [Unit Testing Suite (45 Tests)](#unit-testing-suite-45-tests)
 - [Integration Testing Suite (35 Tests)](#integration-testing-suite-35-tests)
 - [Fast Regression & CI/CD Gates](#fast-regression--cicd-gates)
 - [Test Execution & Verification](#test-execution--verification)
@@ -23,7 +23,7 @@
 
 ## Overview
 
-The repository enforces a rigorous, automated testing discipline. The entire codebase is covered by **77 automated unit and integration tests** executing in under **4 seconds**. Every release, pipeline modification, and architectural update must pass 100% of the test suite before deployment.
+The repository enforces a rigorous, automated testing discipline. The entire codebase is covered by **80 automated unit and integration tests** executing in under **4 seconds**. Every release, pipeline modification, and architectural update must pass 100% of the test suite before deployment.
 
 ---
 
