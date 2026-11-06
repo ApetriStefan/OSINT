@@ -95,3 +95,5 @@ temp/
 *.bak
 *.swp
 *.swo
+dossier_for_agent_1.txt
+pre_fix_payload.json
